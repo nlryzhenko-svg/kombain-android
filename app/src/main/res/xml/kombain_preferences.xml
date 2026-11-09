@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/ks_cat_connect">
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_flight_takeoff_24"
+            app:key="isAutoConnect"
+            app:summary="@string/ks_autoconnect_sum"
+            app:title="@string/ks_autoconnect" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="vpn"
+            app:entries="@array/ks_service_modes"
+            app:entryValues="@array/service_mode_values"
+            app:icon="@drawable/ic_device_developer_mode"
+            app:key="serviceMode"
+            app:title="@string/ks_mode"
+            app:useSimpleSummaryProvider="true" />
+        <Preference
+            app:icon="@drawable/ic_navigation_apps"
+            app:key="ks_apps"
+            app:title="@string/ks_apps" />
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_home_24"
+            app:key="bypassLan"
+            app:summary="@string/ks_lan_sum"
+            app:title="@string/ks_lan" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_route">
+        <SwitchPreference
+            app:icon="@drawable/ic_maps_directions"
+            app:key="ks_ru_direct"
+            app:persistent="false"
+            app:summary="@string/ks_ru_sum"
+            app:title="@string/ks_ru" />
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_block_24"
+            app:key="ks_block_ads"
+            app:persistent="false"
+            app:summary="@string/ks_ads_sum"
+            app:title="@string/ks_ads" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:entries="@array/ks_dns_names"
+            app:entryValues="@array/ks_dns_values"
+            app:icon="@drawable/ic_action_dns"
+            app:key="remoteDns"
+            app:title="@string/ks_dns"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_stable">
+        <Preference
+            app:icon="@drawable/ic_baseline_battery_charging_full_24"
+            app:key="ks_battery"
+            app:title="@string/ks_battery" />
+        <SwitchPreference
+            app:icon="@drawable/ic_baseline_lock_24"
+            app:key="acquireWakeLock"
+            app:summary="@string/ks_wakelock_sum"
+            app:title="@string/ks_wakelock" />
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_baseline_refresh_24"
+            app:key="networkChangeResetConnections"
+            app:summary="@string/ks_netreset_sum"
+            app:title="@string/ks_netreset" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_look">
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="0"
+            app:entries="@array/ks_night_modes"
+            app:entryValues="@array/int_array_4"
+            app:icon="@drawable/ic_baseline_wb_sunny_24"
+            app:key="nightTheme"
+            app:title="@string/ks_night"
+            app:useSimpleSummaryProvider="true" />
+        <moe.matsuri.nb4a.ui.ColorPickerPreference
+            app:icon="@drawable/ic_baseline_color_lens_24"
+            app:key="appTheme"
+            app:summary="@string/ks_color_sum"
+            app:title="@string/ks_color" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_check">
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="http://cp.cloudflare.com/"
+            app:entries="@array/ks_test_names"
+            app:entryValues="@array/ks_test_values"
+            app:icon="@drawable/ic_baseline_cast_connected_24"
+            app:key="connectionTestURL"
+            app:title="@string/ks_test"
+            app:useSimpleSummaryProvider="true" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="0"
+            app:entries="@array/ks_log_names"
+            app:entryValues="@array/int_array_5"
+            app:icon="@drawable/ic_baseline_bug_report_24"
+            app:key="logLevel"
+            app:title="@string/ks_log"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_more">
+        <Preference
+            app:icon="@drawable/ic_baseline_info_24"
+            app:key="ks_help"
+            app:summary="@string/ks_help_sum"
+            app:title="@string/ks_help" />
+        <Preference
+            app:icon="@drawable/ic_action_settings"
+            app:key="ks_advanced"
+            app:summary="@string/ks_advanced_sum"
+            app:title="@string/ks_advanced" />
+    </PreferenceCategory>
+</PreferenceScreen>

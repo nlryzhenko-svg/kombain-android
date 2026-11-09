@@ -49,6 +49,10 @@
         android:id="@+id/about"
         android:checkableBehavior="single">
         <item
+            android:id="@+id/nav_help"
+            android:icon="@drawable/ic_kombain_help_toolbar"
+            android:title="@string/ks_help" />
+        <item
             android:id="@+id/nav_about"
             android:icon="@drawable/ic_baseline_info_24"
             android:title="@string/menu_about" />

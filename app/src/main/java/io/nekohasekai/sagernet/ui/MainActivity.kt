@@ -93,8 +93,12 @@ class MainActivity : ThemedActivity(),
             displayFragmentWithId(R.id.nav_configuration)
         }
         onBackPressedDispatcher.addCallback {
-            if (supportFragmentManager.findFragmentById(R.id.fragment_holder) is ConfigurationFragment) {
+            val current = supportFragmentManager.findFragmentById(R.id.fragment_holder)
+            if (current is ConfigurationFragment) {
                 moveTaskToBack(true)
+            } else if (current is HelpFragment || current is SettingsFragment) {
+                // help and advanced settings are opened from Kombain settings
+                displayFragmentWithId(R.id.nav_settings)
             } else {
                 displayFragmentWithId(R.id.nav_configuration)
             }
@@ -339,12 +343,13 @@ class MainActivity : ThemedActivity(),
             R.id.nav_group -> displayFragment(GroupFragment())
             R.id.nav_hotspot -> displayFragment(HotspotFragment())
             R.id.nav_route -> displayFragment(RouteFragment())
-            R.id.nav_settings -> displayFragment(SettingsFragment())
+            R.id.nav_settings -> displayFragment(KombainSettingsFragment())
             R.id.nav_traffic -> displayFragment(WebviewFragment())
             R.id.nav_tools -> displayFragment(ToolsFragment())
             R.id.nav_logcat -> displayFragment(LogcatFragment())
 
             R.id.nav_about -> displayFragment(AboutFragment())
+            R.id.nav_help -> displayFragment(HelpFragment())
 
             else -> return false
         }

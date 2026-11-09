@@ -530,4 +530,43 @@
         <item>@string/sniff_override</item>
     </string-array>
 
+    <string-array name="ks_service_modes" translatable="false">
+        <item>VPN — весь телефон</item>
+        <item>Только прокси, без VPN</item>
+    </string-array>
+    <string-array name="ks_dns_names" translatable="false">
+        <item>Google</item>
+        <item>Cloudflare</item>
+        <item>Quad9</item>
+        <item>AdGuard (без рекламы)</item>
+    </string-array>
+    <string-array name="ks_dns_values" translatable="false">
+        <item>https://dns.google/dns-query</item>
+        <item>https://1.1.1.1/dns-query</item>
+        <item>https://dns.quad9.net/dns-query</item>
+        <item>https://dns.adguard-dns.com/dns-query</item>
+    </string-array>
+    <string-array name="ks_night_modes" translatable="false">
+        <item>Как в системе</item>
+        <item>Тёмная</item>
+        <item>Светлая</item>
+        <item>По времени суток</item>
+    </string-array>
+    <string-array name="ks_test_names" translatable="false">
+        <item>Cloudflare</item>
+        <item>Google</item>
+        <item>Google (HTTPS)</item>
+    </string-array>
+    <string-array name="ks_test_values" translatable="false">
+        <item>http://cp.cloudflare.com/</item>
+        <item>http://www.gstatic.com/generate_204</item>
+        <item>https://www.google.com/generate_204</item>
+    </string-array>
+    <string-array name="ks_log_names" translatable="false">
+        <item>Выключен</item>
+        <item>Только ошибки</item>
+        <item>Обычный</item>
+        <item>Подробный</item>
+        <item>Всё подряд</item>
+    </string-array>
 </resources>
