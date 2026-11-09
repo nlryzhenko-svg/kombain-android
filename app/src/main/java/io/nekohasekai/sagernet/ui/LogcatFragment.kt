@@ -28,7 +28,7 @@ class LogcatFragment : ToolbarFragment(R.layout.layout_logcat),
     @SuppressLint("RestrictedApi", "WrongConstant")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        toolbar.setTitle(R.string.menu_log)
+        toolbar.setTitle(R.string.more_log)
 
         toolbar.inflateMenu(R.menu.logcat_menu)
         toolbar.setOnMenuItemClickListener(this)
@@ -45,18 +45,18 @@ class LogcatFragment : ToolbarFragment(R.layout.layout_logcat),
     }
 
     private fun getColorForLine(line: String): ForegroundColorSpan {
-        var color = ForegroundColorSpan(Color.GRAY)
+        var color = ForegroundColorSpan(0xFF8FA5A2.toInt())
         when {
             line.contains("INFO[") || line.contains(" [Info]") -> {
-                color = ForegroundColorSpan((0xFF86C166).toInt())
+                color = ForegroundColorSpan(0xFF2FE3A6.toInt())
             }
 
             line.contains("ERROR[") || line.contains(" [Error]") -> {
-                color = ForegroundColorSpan(Color.RED)
+                color = ForegroundColorSpan(0xFFFF6B6B.toInt())
             }
 
             line.contains("WARN[") || line.contains(" [Warning]") -> {
-                color = ForegroundColorSpan(Color.RED)
+                color = ForegroundColorSpan(0xFFFFD166.toInt())
             }
         }
         return color

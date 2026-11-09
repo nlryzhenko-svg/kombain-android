@@ -1,6 +1,5 @@
 package io.nekohasekai.sagernet.ui
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -8,272 +7,142 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.text.util.Linkify
 import android.view.View
-import android.widget.Toast
-import androidx.activity.result.component1
-import androidx.activity.result.component2
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
-import androidx.recyclerview.widget.RecyclerView
-import com.danielstone.materialaboutlibrary.MaterialAboutFragment
-import com.danielstone.materialaboutlibrary.items.MaterialAboutActionItem
-import com.danielstone.materialaboutlibrary.model.MaterialAboutCard
-import com.danielstone.materialaboutlibrary.model.MaterialAboutList
-import io.nekohasekai.sagernet.BuildConfig
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.nekohasekai.sagernet.R
+import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.databinding.LayoutAboutBinding
+import io.nekohasekai.sagernet.fmt.v2ray.Xray
 import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.plugin.PluginManager.loadString
 import io.nekohasekai.sagernet.utils.PackageCache
 import io.nekohasekai.sagernet.widget.ListListener
 import libcore.Libcore
 import moe.matsuri.nb4a.plugin.Plugins
-import androidx.core.net.toUri
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import io.nekohasekai.sagernet.SagerNet
-import io.nekohasekai.sagernet.database.DataStore
-import moe.matsuri.nb4a.utils.Util
-import org.json.JSONObject
 
+/** Kombain's own «О Kombain» screen: version, engines, plugins and licence. */
 class AboutFragment : ToolbarFragment(R.layout.layout_about) {
+
+    private lateinit var binding: LayoutAboutBinding
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        val binding = LayoutAboutBinding.bind(view)
-
+        binding = LayoutAboutBinding.bind(view)
         ViewCompat.setOnApplyWindowInsetsListener(view, ListListener)
-        toolbar.setTitle(R.string.menu_about)
+        toolbar.setTitle(R.string.more_about)
 
-        parentFragmentManager.beginTransaction()
-            .replace(R.id.about_fragment_holder, AboutContent())
-            .commitAllowingStateLoss()
-
-        runOnDefaultDispatcher {
-            val license = view.context.assets.open("LICENSE").bufferedReader().readText()
-            onMainDispatcher {
-                binding.license.text = license
-                Linkify.addLinks(binding.license, Linkify.EMAIL_ADDRESSES or Linkify.WEB_URLS)
+        binding.aboutVersion.text = SagerNet.appVersionNameForDisplay
+        binding.aboutLicenseBtn.setOnClickListener { showLicense() }
+        binding.aboutSourceBtn.setOnClickListener {
+            requireContext().launchCustomTab("https://github.com/MatsuriDayo/NekoBoxForAndroid")
+        }
+        binding.aboutBattery.setOnClickListener {
+            runCatching {
+                startActivity(Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    "package:${app.packageName}".toUri()
+                ))
             }
         }
+        loadComponents()
     }
 
-    class AboutContent : MaterialAboutFragment() {
-
-        val requestIgnoreBatteryOptimizations = registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { (resultCode, _) ->
-            if (resultCode == Activity.RESULT_OK) {
-                parentFragmentManager.beginTransaction()
-                    .replace(R.id.about_fragment_holder, AboutContent())
-                    .commitAllowingStateLoss()
-            }
+    override fun onResume() {
+        super.onResume()
+        if (!::binding.isInitialized) return
+        var show = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
+            show = !pm.isIgnoringBatteryOptimizations(app.packageName)
         }
+        binding.aboutBattery.visibility = if (show) View.VISIBLE else View.GONE
+    }
 
-        override fun getMaterialAboutList(activityContext: Context): MaterialAboutList {
-            return MaterialAboutList.Builder()
-                .addCard(
-                    MaterialAboutCard.Builder()
-                        .outline(false)
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .icon(R.drawable.ic_baseline_update_24)
-                                .text(R.string.app_version)
-                                .subText(SagerNet.appVersionNameForDisplay)
-                                .setOnClickAction {
-                                    requireContext().launchCustomTab(
-                                        "https://github.com/MatsuriDayo/NekoBoxForAndroid/releases"
-                                    )
-                                }
-                                .build())
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .text(R.string.check_update_release)
-                                .setOnClickAction {
-                                    checkUpdate(false)
-                                }
-                                .build())
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .text(R.string.check_update_preview)
-                                .setOnClickAction {
-                                    checkUpdate(true)
-                                }
-                                .build())
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .icon(R.drawable.ic_baseline_layers_24)
-                                .text(getString(R.string.version_x, "sing-box"))
-                                .subText(Libcore.versionBox())
-                                .setOnClickAction { }
-                                .build())
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .icon(R.drawable.ic_baseline_card_giftcard_24)
-                                .text(R.string.donate)
-                                .subText(R.string.donate_info)
-                                .setOnClickAction {
-                                    requireContext().launchCustomTab(
-                                        "https://matsuridayo.github.io/index_docs/#donate"
-                                    )
-                                }
-                                .build())
-                        .apply {
-                            PackageCache.awaitLoadSync()
-                            for ((_, pkg) in PackageCache.installedPluginPackages) {
-                                try {
-                                    val pluginId =
-                                        pkg.providers?.get(0)?.loadString(Plugins.METADATA_KEY_ID)
-                                    if (pluginId.isNullOrBlank()) continue
-                                    addItem(
-                                        MaterialAboutActionItem.Builder()
-                                            .icon(R.drawable.ic_baseline_nfc_24)
-                                            .text(
-                                                getString(
-                                                    R.string.version_x,
-                                                    pluginId
-                                                ) + " (${Plugins.displayExeProvider(pkg.packageName)})"
-                                            )
-                                            .subText("v" + pkg.versionName)
-                                            .setOnClickAction {
-                                                startActivity(Intent().apply {
-                                                    action =
-                                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                                                    data = Uri.fromParts(
-                                                        "package", pkg.packageName, null
-                                                    )
-                                                })
-                                            }
-                                            .build())
-                                } catch (e: Exception) {
-                                    Logs.w(e)
-                                }
-                            }
-                        }
-                        .apply {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-                                if (!pm.isIgnoringBatteryOptimizations(app.packageName)) {
-                                    addItem(
-                                        MaterialAboutActionItem.Builder()
-                                            .icon(R.drawable.ic_baseline_running_with_errors_24)
-                                            .text(R.string.ignore_battery_optimizations)
-                                            .subText(R.string.ignore_battery_optimizations_sum)
-                                            .setOnClickAction {
-                                                requestIgnoreBatteryOptimizations.launch(
-                                                    Intent(
-                                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                                        "package:${app.packageName}".toUri()
-                                                    )
-                                                )
-                                            }
-                                            .build())
-                                }
-                            }
-                        }
-                        .build())
-                .addCard(
-                    MaterialAboutCard.Builder()
-                        .outline(false)
-                        .title(R.string.project)
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .icon(R.drawable.ic_baseline_sanitizer_24)
-                                .text(R.string.github)
-                                .setOnClickAction {
-                                    requireContext().launchCustomTab(
-                                        "https://github.com/MatsuriDayo/NekoBoxForAndroid"
-
-                                    )
-                                }
-                                .build())
-                        .addItem(
-                            MaterialAboutActionItem.Builder()
-                                .icon(R.drawable.ic_qu_shadowsocks_foreground)
-                                .text(R.string.telegram)
-                                .setOnClickAction {
-                                    requireContext().launchCustomTab(
-                                        "https://t.me/MatsuriDayo"
-                                    )
-                                }
-                                .build())
-                        .build())
-                .build()
-
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-
-            view.findViewById<RecyclerView>(R.id.mal_recyclerview).apply {
-                overScrollMode = RecyclerView.OVER_SCROLL_NEVER
-            }
-        }
-
-        fun checkUpdate(checkPreview: Boolean) {
-            runOnIoDispatcher {
+    private fun loadComponents() {
+        runOnDefaultDispatcher {
+            val rows = mutableListOf<Triple<String, String, (() -> Unit)?>>()
+            rows += Triple("sing-box", getString(R.string.ab_core_engine) + " · " +
+                    runCatching {
+                        val v = Libcore.versionBox()
+                        Regex("""sing-box:?\s*(\S+)""").find(v)?.groupValues?.get(1) ?: v.lineSequence().first()
+                    }.getOrDefault("?"), null)
+            val xray = if (Xray.isAvailable()) runCatching {
+                val p = ProcessBuilder(Xray.executable().absolutePath, "version")
+                    .redirectErrorStream(true).start()
+                val first = p.inputStream.bufferedReader().readLine().orEmpty()
+                p.destroy()
+                Regex("""Xray (\S+)""").find(first)?.groupValues?.get(1) ?: first
+            }.getOrDefault("?") else getString(R.string.ab_not_bundled)
+            rows += Triple("Xray-core", getString(R.string.ab_xray_engine) + " · " + xray, null)
+            PackageCache.awaitLoadSync()
+            for ((_, pkg) in PackageCache.installedPluginPackages) {
                 try {
-                    val client = Libcore.newHttpClient().apply {
-                        modernTLS()
-                        trySocks5(DataStore.mixedPort)
-                    }
-                    val response = client.newRequest().apply {
-                        if (checkPreview) {
-                            setURL("https://api.github.com/repos/MatsuriDayo/NekoBoxForAndroid/releases/tags/preview")
-                        } else {
-                            setURL("https://api.github.com/repos/MatsuriDayo/NekoBoxForAndroid/releases/latest")
-                        }
-                    }.execute()
-                    val release = JSONObject(Util.getStringBox(response.contentString))
-                    val releaseName = release.getString("name")
-                    val releaseUrl = release.getString("html_url")
-                    var haveUpdate = releaseName.isNotBlank()
-                    haveUpdate = if (isPreview) {
-                        if (checkPreview) {
-                            haveUpdate && releaseName != BuildConfig.PRE_VERSION_NAME
-                        } else {
-                            // User: 1.3.9 pre-1.4.0 Stable: 1.3.9 -> No update
-                            haveUpdate && releaseName != BuildConfig.VERSION_NAME
-                        }
-                    } else {
-                        // User: 1.4.0 Preview: pre-1.4.0 -> No update
-                        // User: 1.4.0 Preview: pre-1.4.1 -> Update
-                        // User: 1.4.0 Stable: 1.4.0 -> No update
-                        // User: 1.4.0 Stable: 1.4.1 -> Update
-                        haveUpdate && !releaseName.contains(BuildConfig.VERSION_NAME)
-                    }
-                    runOnMainDispatcher {
-                        if (haveUpdate) {
-                            val context = requireContext()
-                            MaterialAlertDialogBuilder(context)
-                                .setTitle(R.string.update_dialog_title)
-                                .setMessage(
-                                    context.getString(
-                                        R.string.update_dialog_message,
-                                        SagerNet.appVersionNameForDisplay,
-                                        releaseName
-                                    )
-                                )
-                                .setPositiveButton(R.string.yes) { _, _ ->
-                                    val intent = Intent(Intent.ACTION_VIEW, releaseUrl.toUri())
-                                    context.startActivity(intent)
-                                }
-                                .setNegativeButton(R.string.no, null)
-                                .show()
-                        } else {
-                            Toast.makeText(app, R.string.check_update_no, Toast.LENGTH_SHORT).show()
-                        }
+                    val id = pkg.providers?.get(0)?.loadString(Plugins.METADATA_KEY_ID)
+                    if (id.isNullOrBlank()) continue
+                    rows += Triple(getString(R.string.ab_plugin, id), "v" + pkg.versionName) {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", pkg.packageName, null)
+                        })
                     }
                 } catch (e: Exception) {
                     Logs.w(e)
-                    runOnMainDispatcher {
-                        Toast.makeText(app, e.readableMessage, Toast.LENGTH_SHORT).show()
+                }
+            }
+            onMainDispatcher {
+                if (!isAdded) return@onMainDispatcher
+                val box = binding.aboutComponents
+                box.removeAllViews()
+                val ctx = requireContext()
+                val tv = android.util.TypedValue()
+                ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+                rows.forEachIndexed { i, (title, sub, click) ->
+                    if (i > 0) box.addView(View(ctx).apply {
+                        setBackgroundColor(ContextCompat.getColor(ctx, R.color.kombain_tile_stroke))
+                    }, LinearLayout.LayoutParams(-1, dp2px(1)).apply {
+                        marginStart = dp2px(16); marginEnd = dp2px(16)
+                    })
+                    val row = LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp2px(16), dp2px(12), dp2px(16), dp2px(12))
+                        if (click != null) {
+                            setBackgroundResource(tv.resourceId)
+                            setOnClickListener { click() }
+                        }
                     }
+                    row.addView(TextView(ctx).apply {
+                        text = title
+                        textSize = 15.5f
+                        setTypeface(typeface, android.graphics.Typeface.BOLD)
+                        setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
+                    })
+                    row.addView(TextView(ctx).apply {
+                        text = sub
+                        textSize = 13f
+                        setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
+                    })
+                    box.addView(row)
                 }
             }
         }
-
     }
 
+    private fun showLicense() {
+        runOnDefaultDispatcher {
+            val text = runCatching {
+                requireContext().assets.open("LICENSE").bufferedReader().readText()
+            }.getOrDefault("GPL-3.0")
+            onMainDispatcher {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.ab_license)
+                    .setMessage(text)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
+    }
 }

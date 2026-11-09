@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Kombain server tile. View ids and types are kept from NekoBox so the adapter code works unchanged. -->
+<!-- Kombain server row. View ids/types are kept for the adapter; the old action buttons live in a hidden holder. -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/content"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="5dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="4dp"
+    android:layout_marginBottom="4dp"
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="@color/kombain_tile"
@@ -33,144 +36,136 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:focusable="true"
-            android:minHeight="112dp"
-            android:orientation="vertical"
-            android:paddingStart="14dp"
-            android:paddingTop="12dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="6dp">
+            android:gravity="center_vertical"
+            android:minHeight="72dp"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="10dp">
+
+            <TextView
+                android:id="@+id/proto_badge"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/kombain_badge"
+                android:gravity="center"
+                android:textColor="@color/kombain_fab"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="VL" />
 
             <LinearLayout
                 android:id="@+id/container"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:nextFocusRight="@+id/edit"
-                android:orientation="horizontal">
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:nextFocusRight="@+id/more"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/profile_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    tools:text="USA" />
 
                 <TextView
                     android:id="@+id/profile_type"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_marginTop="2dp"
                     android:ellipsize="end"
-                    android:letterSpacing="0.06"
                     android:maxLines="1"
-                    android:textAllCaps="true"
                     android:textColor="?attr/accentOrTextSecondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    tools:text="VLESS" />
+                    android:textSize="12.5sp"
+                    tools:text="VLESS · Xray" />
 
-                <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/remove"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/delete"
-                    android:focusable="true"
-                    android:padding="6dp"
-                    android:visibility="gone"
-                    app:srcCompat="@drawable/ic_action_delete" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/profile_address"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/traffic_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
 
             <TextView
-                android:id="@+id/profile_name"
-                android:layout_width="match_parent"
+                android:id="@+id/profile_status"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:layout_marginEnd="10dp"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="?android:attr/textColorPrimary"
-                android:textSize="17sp"
-                android:textStyle="bold"
-                tools:text="USA" />
+                android:layout_marginStart="8dp"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12.5sp"
+                tools:text="84 мс" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <ImageView
+                android:id="@+id/more"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/kb_actions"
+                android:padding="10dp"
+                android:src="@drawable/ic_kombain_dots_v"
+                app:tint="?android:attr/textColorSecondary" />
+
+            <!-- legacy action buttons: kept for their click logic, never shown -->
+            <FrameLayout
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
-                android:orientation="vertical"
-                android:visibility="gone"
-                tools:visibility="visible">
-
-                <TextView
-                    android:id="@+id/profile_address"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/traffic_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/profile_status"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:fontFamily="monospace"
-                    android:maxLines="1"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textSize="12sp"
-                    tools:text="84 ms" />
+                android:visibility="gone">
 
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/edit"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/edit"
-                    android:focusable="true"
-                    android:padding="8dp"
-                    app:srcCompat="@drawable/ic_image_edit"
-                    app:tint="?android:attr/textColorSecondary" />
+                    android:layout_width="1dp"
+                    android:layout_height="1dp" />
 
                 <LinearLayout
                     android:id="@+id/share"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/share"
-                    android:focusable="true"
-                    android:nextFocusLeft="@+id/container">
+                    android:layout_width="1dp"
+                    android:layout_height="1dp">
 
                     <LinearLayout
                         android:id="@+id/share_layer"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:padding="8dp">
+                        android:layout_width="1dp"
+                        android:layout_height="1dp">
 
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/shareIcon"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            app:srcCompat="@drawable/ic_social_share"
-                            app:tint="?android:attr/textColorSecondary" />
+                            android:layout_width="1dp"
+                            android:layout_height="1dp" />
                     </LinearLayout>
                 </LinearLayout>
-            </LinearLayout>
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/remove"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp" />
+            </FrameLayout>
         </LinearLayout>
     </FrameLayout>
 </com.google.android.material.card.MaterialCardView>

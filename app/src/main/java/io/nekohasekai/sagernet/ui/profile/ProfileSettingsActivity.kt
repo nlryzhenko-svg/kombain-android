@@ -1,5 +1,6 @@
 package io.nekohasekai.sagernet.ui.profile
 
+import io.nekohasekai.sagernet.ui.applyKombainCards
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.Intent
@@ -229,6 +230,7 @@ abstract class ProfileSettingsActivity<T : AbstractBean>(
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+        applyKombainCards()
 
             ViewCompat.setOnApplyWindowInsetsListener(listView, ListListener)
 

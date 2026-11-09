@@ -81,13 +81,15 @@ class MainActivity : ThemedActivity(),
         binding.bottomNav.setOnItemSelectedListener { item ->
             if (syncingBottomNav) return@setOnItemSelectedListener true
             if (item.itemId == R.id.nav_more) {
-                binding.drawerLayout.openDrawer(GravityCompat.START)
+                MoreSheet.show(this)
                 false
             } else {
                 displayFragmentWithId(item.itemId)
             }
         }
-        binding.bottomNav.setOnItemReselectedListener { }
+        binding.bottomNav.setOnItemReselectedListener { if (it.itemId == R.id.nav_more) MoreSheet.show(this) }
+        // Kombain: no side drawer — everything lives in the bottom bar and the «Ещё» sheet
+        binding.drawerLayout.setDrawerLockMode(androidx.drawerlayout.widget.DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
 
         if (savedInstanceState == null) {
             displayFragmentWithId(R.id.nav_configuration)
@@ -371,6 +373,13 @@ class MainActivity : ThemedActivity(),
     }
 
     private var syncingBottomNav = false
+
+    /** Highlights «Ещё» for screens opened from the sheet. */
+    fun markMore() {
+        syncingBottomNav = true
+        binding.bottomNav.menu.findItem(R.id.nav_more)?.isChecked = true
+        syncingBottomNav = false
+    }
     var statusCard: StatusCardController? = null
 
     fun toggleService() {

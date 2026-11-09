@@ -176,7 +176,7 @@
 %s</string>
 <string name="group_create">Создать группу</string>
 <string name="group_create_subscription">Создать подписку</string>
-<string name="group_default">Разгруппировано</string>
+<string name="group_default">Основные</string>
 <string name="group_delete_confirm_prompt">Вы уверены, что хотите удалить эту группу?</string>
 <string name="group_deleted">Удалено: 
 %s</string>
@@ -377,7 +377,7 @@
 <string name="route_reset">Сброс</string>
 <string name="route_rules_official">Официальный</string>
 <string name="route_rules_provider">Поставщик ресурсов правил</string>
-<string name="route_warn">Перед добавлением собственных правил убедитесь, что вы прочитали документацию, иначе подключение к Интернету может не удасться.</string>
+<string name="route_warn">Правила проверяются сверху вниз — сработает первое подходящее. Готовые наборы («РФ напрямую», «Без рекламы») включаются в Настройках.</string>
 <string name="scanning">Сканирование…</string>
 <string name="search_apps">Поиск…</string>
 <string name="search_menu_title">Поиск</string>

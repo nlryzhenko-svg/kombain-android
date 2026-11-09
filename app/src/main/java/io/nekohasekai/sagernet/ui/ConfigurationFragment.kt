@@ -274,7 +274,7 @@ class ConfigurationFragment @JvmOverloads constructor(
 
     override fun onDestroyView() {
         // only detach our own card: a newer ConfigurationFragment may already own the slot
-        (activity as? MainActivity)?.let { if (it.statusCard === myStatusCard) it.statusCard = null }
+        (activity as? MainActivity)?.let { if (it.statusCard === myStatusCard) it.statusCard = null }; myStatusCard?.release()
         myStatusCard = null
         super.onDestroyView()
     }
@@ -361,8 +361,31 @@ class ConfigurationFragment @JvmOverloads constructor(
 
     }
 
+    /** Kombain «+» sheet: the ways to add a server, then the manual protocol list. */
+    private fun showAddSheet() {
+        val ctx = requireContext()
+        fun run(id: Int) { toolbar.menu.findItem(id)?.let { onMenuItemClick(it) } }
+        ActionSheet.show(ctx, getString(R.string.kb_add_title), listOf(
+            ActionSheet.Action(R.drawable.ic_kombain_paste, getString(R.string.kb_add_clip), getString(R.string.kb_add_clip_sub)) { run(R.id.action_import_clipboard) },
+            ActionSheet.Action(R.drawable.ic_kombain_qr, getString(R.string.kb_add_qr)) { run(R.id.action_scan_qr_code) },
+            ActionSheet.Action(R.drawable.ic_kombain_log, getString(R.string.kb_add_file), getString(R.string.kb_add_file_sub)) { run(R.id.action_import_file) },
+            ActionSheet.Action(R.drawable.ic_kombain_server, getString(R.string.srv_menu), getString(R.string.kb_add_server_sub)) { run(R.id.action_kombain_server) },
+            ActionSheet.Action(R.drawable.ic_image_edit, getString(R.string.kb_add_manual), getString(R.string.kb_add_manual_sub)) { showManualSheet() },
+        ))
+    }
+
+    private fun showManualSheet() {
+        val group = toolbar.menu.findItem(R.id.action_manual_group)?.subMenu ?: return
+        val actions = (0 until group.size()).map { group.getItem(it) }.filter { it.isVisible }.map { mi ->
+            ActionSheet.Action(R.drawable.ic_kombain_add_outline, mi.title ?: "") { onMenuItemClick(mi) }
+        }
+        ActionSheet.show(requireContext(), getString(R.string.kb_add_manual), actions)
+    }
+
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.action_add -> showAddSheet()
+
             R.id.action_scan_qr_code -> {
                 startActivity(Intent(context, ScannerActivity::class.java))
             }
@@ -1180,7 +1203,7 @@ class ConfigurationFragment @JvmOverloads constructor(
             if (!::proxyGroup.isInitialized) return
 
             configurationListView = view.findViewById(R.id.configuration_list)
-            layoutManager = io.nekohasekai.sagernet.ktx.FixedGridLayoutManager(configurationListView)
+            layoutManager = FixedLinearLayoutManager(configurationListView)
             configurationListView.layoutManager = layoutManager
             adapter = ConfigurationAdapter()
             ProfileManager.addListener(adapter!!)
@@ -1507,6 +1530,25 @@ class ConfigurationFragment @JvmOverloads constructor(
             val shareLayer: LinearLayout = view.findViewById(R.id.share_layer)
             val shareButton: ImageView = view.findViewById(R.id.shareIcon)
             val removeButton: ImageView = view.findViewById(R.id.remove)
+            val protoBadge: TextView = view.findViewById(R.id.proto_badge)
+            val moreButton: ImageView = view.findViewById(R.id.more)
+
+            /** Kombain «⋯» sheet; share is added once the profile's links are known. */
+            fun bindMore(entity: ProxyEntity, share: ((View) -> Unit)?) {
+                moreButton.isGone = select
+                moreButton.setOnClickListener {
+                    val ctx = requireContext()
+                    val actions = mutableListOf(
+                        ActionSheet.Action(R.drawable.ic_image_edit, ctx.getString(R.string.kb_act_edit)) { editButton.performClick() },
+                    )
+                    if (share != null) actions += ActionSheet.Action(R.drawable.ic_social_share, ctx.getString(R.string.kb_act_share),
+                        ctx.getString(R.string.kb_act_share_sub)) { share(moreButton) }
+                    actions += ActionSheet.Action(R.drawable.ic_action_delete, ctx.getString(R.string.kb_act_delete), danger = true) {
+                        removeButton.performClick()
+                    }
+                    ActionSheet.show(ctx, entity.displayName(), actions)
+                }
+            }
 
             fun bind(proxyEntity: ProxyEntity, trafficData: TrafficData? = null) {
                 val pf = parentFragment as? ConfigurationFragment ?: return
@@ -1552,6 +1594,8 @@ class ConfigurationFragment @JvmOverloads constructor(
 
                 profileName.text = proxyEntity.displayName()
                 profileType.text = proxyEntity.displayType()
+                protoBadge.text = kombainBadge(proxyEntity)
+                bindMore(proxyEntity, null)
                 profileType.setTextColor(requireContext().getProtocolColor(proxyEntity.type))
 
                 var rx = proxyEntity.rx
@@ -1685,6 +1729,7 @@ class ConfigurationFragment @JvmOverloads constructor(
                             shareLayout.setOnClickListener {
                                 showShare(it)
                             }
+                            bindMore(proxyEntity) { anchor -> showShare(anchor) }
                         }
                     }
                 }
@@ -1762,4 +1807,19 @@ class ConfigurationFragment @JvmOverloads constructor(
         searchView.clearFocus()
     }
 
+}
+
+/** Two-letter protocol mark for the server row badge. */
+fun kombainBadge(p: ProxyEntity): String = when (p.type) {
+    ProxyEntity.TYPE_VMESS -> if (p.vmessBean?.isVLESS == true) "VL" else "VM"
+    ProxyEntity.TYPE_TROJAN, ProxyEntity.TYPE_TROJAN_GO -> "TR"
+    ProxyEntity.TYPE_SS -> "SS"
+    ProxyEntity.TYPE_HYSTERIA -> "HY"
+    ProxyEntity.TYPE_TUIC -> "TU"
+    ProxyEntity.TYPE_WG -> if (!p.wgBean?.amneziaParams.isNullOrBlank()) "AW" else "WG"
+    ProxyEntity.TYPE_SSH -> "SH"
+    ProxyEntity.TYPE_SOCKS -> "S5"
+    ProxyEntity.TYPE_HTTP -> "HT"
+    ProxyEntity.TYPE_CHAIN -> "⛓"
+    else -> p.displayType().take(2).uppercase()
 }

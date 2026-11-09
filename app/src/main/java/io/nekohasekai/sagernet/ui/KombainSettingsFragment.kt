@@ -197,6 +197,11 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         }
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        applyKombainCards()
+    }
+
     // ---- "?" buttons -------------------------------------------------------
 
     private fun helpText(key: String?): String? {

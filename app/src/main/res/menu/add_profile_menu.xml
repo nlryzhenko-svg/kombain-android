@@ -9,9 +9,15 @@
 
     <item
         android:id="@+id/action_add"
-        android:icon="@drawable/ic_action_note_add"
+        android:icon="@drawable/ic_kombain_add"
         android:title="@string/add_profile"
-        app:showAsAction="ifRoom">
+        app:showAsAction="always" />
+
+    <!-- Kombain: the old add sub-menu stays hidden; the «+» sheet calls its items -->
+    <item
+        android:id="@+id/action_add_hidden"
+        android:title="@string/add_profile"
+        android:visible="false">
         <menu>
             <item
                 android:id="@+id/action_scan_qr_code"
@@ -25,7 +31,7 @@
             <item
                 android:id="@+id/action_kombain_server"
                 android:title="@string/srv_menu" />
-            <item android:title="@string/add_profile_methods_manual_settings">
+            <item android:id="@+id/action_manual_group" android:title="@string/add_profile_methods_manual_settings">
                 <menu>
                     <item
                         android:id="@+id/action_new_socks"
@@ -85,7 +91,7 @@
 
     <item
         android:id="@+id/action_misc"
-        android:icon="@drawable/ic_baseline_more_vert_24"
+        android:icon="@drawable/ic_kombain_tune"
         android:title=""
         app:showAsAction="always">
         <menu>

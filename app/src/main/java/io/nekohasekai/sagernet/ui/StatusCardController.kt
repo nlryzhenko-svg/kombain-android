@@ -7,8 +7,11 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.progressindicator.LinearProgressIndicator
-import com.google.android.material.switchmaterial.SwitchMaterial
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.widget.ImageView
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.BaseService
 import io.nekohasekai.sagernet.database.DataStore
@@ -29,22 +32,34 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     private val title: TextView = root.findViewById(R.id.status_title)
     private val server: TextView = root.findViewById(R.id.status_server)
     private val detail: TextView = root.findViewById(R.id.status_detail)
-    private val switch: SwitchMaterial = root.findViewById(R.id.status_switch)
-    private val progress: LinearProgressIndicator = root.findViewById(R.id.status_progress)
+    private val knob: View = root.findViewById(R.id.status_knob)
+    private val knobIcon: ImageView = root.findViewById(R.id.status_knob_icon)
+    private val progress: CircularProgressIndicator = root.findViewById(R.id.status_progress)
+    private val ticker = Handler(Looper.getMainLooper())
+    private val tick = object : Runnable {
+        override fun run() {
+            updateTitle()
+            if (state == BaseService.State.Connected) ticker.postDelayed(this, 1000)
+        }
+    }
+
+    companion object {
+        /** elapsedRealtime when the tunnel came up; survives fragment re-creation */
+        private var connectedSince = 0L
+    }
 
     private var state = BaseService.State.Idle
     private var testResult: String? = null
     private var testing = false
-    private var ignoreSwitch = false
 
     init {
-        switch.setOnCheckedChangeListener { _, checked ->
-            if (ignoreSwitch) return@setOnCheckedChangeListener
-            val running = DataStore.serviceState.canStop
-            if (checked != running) activity.toggleService()
+        knob.setOnClickListener {
+            val s = DataStore.serviceState
+            if (s == BaseService.State.Connecting || s == BaseService.State.Stopping) return@setOnClickListener
+            activity.toggleService()
         }
         card.setOnClickListener {
-            if (DataStore.serviceState.connected) runTest() else activity.toggleService()
+            if (DataStore.serviceState.connected) runTest() else knob.performClick()
         }
         onState(DataStore.serviceState)
         refreshProfile()
@@ -67,20 +82,20 @@ class StatusCardController(root: View, private val activity: MainActivity) {
                 else -> 0xFF9AA9AC.toInt()
             }
         )
-        title.setText(
-            when (newState) {
-                BaseService.State.Connected -> R.string.kb_connected
-                BaseService.State.Connecting -> R.string.kb_connecting
-                BaseService.State.Stopping -> R.string.kb_stopping
-                else -> R.string.kb_disconnected
-            }
-        )
+        if (connected) {
+            if (connectedSince == 0L) connectedSince = SystemClock.elapsedRealtime()
+        } else connectedSince = 0L
+        ticker.removeCallbacks(tick)
+        updateTitle()
+        if (connected) ticker.postDelayed(tick, 1000)
         progress.isVisible = busy || testing
-        ignoreSwitch = true
-        switch.isChecked = newState.canStop
-        switch.isEnabled = !busy
-        ignoreSwitch = false
+        knob.alpha = if (busy) 0.7f else 1f
+        knobIcon.background.mutate().setTint(
+            if (connected) 0xFF2FE3A6.toInt() else 0x33FFFFFF
+        )
+        knobIcon.setColorFilter(if (connected) 0xFF06372A.toInt() else 0xFFFFFFFF.toInt())
         if (!connected) {
+            detail.typeface = android.graphics.Typeface.DEFAULT
             detail.text = ctx.getString(
                 if (newState == BaseService.State.Connecting) R.string.kb_hint_connecting else R.string.kb_hint_off
             )
@@ -90,9 +105,27 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         refreshProfile()
     }
 
+    private fun updateTitle() {
+        val ctx = card.context
+        title.text = when (state) {
+            BaseService.State.Connected -> {
+                val sec = ((SystemClock.elapsedRealtime() - connectedSince) / 1000).coerceAtLeast(0)
+                val t = if (sec >= 3600) "%d:%02d:%02d".format(sec / 3600, sec / 60 % 60, sec % 60)
+                else "%02d:%02d".format(sec / 60, sec % 60)
+                ctx.getString(R.string.kb_connected) + " · " + t
+            }
+            BaseService.State.Connecting -> ctx.getString(R.string.kb_connecting)
+            BaseService.State.Stopping -> ctx.getString(R.string.kb_stopping)
+            else -> ctx.getString(R.string.kb_disconnected)
+        }
+    }
+
+    fun release() = ticker.removeCallbacks(tick)
+
     fun onSpeed(tx: Long, rx: Long) {
         if (state != BaseService.State.Connected) return
         val ctx = card.context
+        detail.typeface = android.graphics.Typeface.MONOSPACE
         val speed = "↓ ${Formatter.formatFileSize(ctx, rx)}/с   ↑ ${Formatter.formatFileSize(ctx, tx)}/с"
         detail.text = testResult?.let { "$it   $speed" } ?: speed
     }

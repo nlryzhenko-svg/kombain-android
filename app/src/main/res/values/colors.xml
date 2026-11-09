@@ -305,5 +305,6 @@
     <color name="kombain_card">#0E8F69</color>
     <color name="kombain_card_off">#3E5459</color>
     <color name="kombain_on_card">#F1FFF9</color>
+    <color name="kombain_danger">#E5534B</color>
     <bool name="kombain_light_bars">true</bool>
 </resources>

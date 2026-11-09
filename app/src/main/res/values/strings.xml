@@ -15,7 +15,7 @@
     <string name="menu_about">About</string>
     <string name="theme">Theme</string>
     <string name="document">Document</string>
-    <string name="group_default">Ungrouped</string>
+    <string name="group_default">Основные</string>
     <string name="quick_toggle">Toggle</string>
     <string name="quick_enable">Enable</string>
     <string name="quick_disable">Disable</string>
@@ -301,8 +301,7 @@
     <string name="apply">Apply</string>
     <string name="need_reload">Reload proxy service to apply changes</string>
     <string name="license">License</string>
-    <string name="route_warn">Make sure you have read the documentation before adding custom rules,
-        otherwise you may not be able to connect to the Internet.</string>
+    <string name="route_warn">Правила проверяются сверху вниз — сработает первое подходящее. Готовые наборы («РФ напрямую», «Без рекламы») включаются в Настройках.</string>
     <string name="lines">%d Lines</string>
     <string name="night_mode">Night Mode</string>
     <string name="follow_system">Follow System</string>
@@ -318,7 +317,7 @@
     <string name="probe_interval">Balancer observation interval</string>
     <string name="standard">Standard</string>
     <string name="v2rayn" translatable="false">V2RayN</string>
-    <string name="available" translatable="false">%dms</string>
+    <string name="available" translatable="false">%d мс</string>
     <string name="unavailable">Unavailable</string>
     <string name="always_show_address">Always Show Address</string>
     <string name="always_show_address_sum">Always display the server address on the configuration
@@ -625,7 +624,7 @@
     <string name="kb_connecting">Подключение…</string>
     <string name="kb_stopping">Отключение…</string>
     <string name="kb_disconnected">Не подключено</string>
-    <string name="kb_hint_off">Включите тумблер, чтобы подключиться</string>
+    <string name="kb_hint_off">Нажмите кнопку, чтобы подключиться</string>
     <string name="kb_hint_connecting">Устанавливаю туннель…</string>
     <string name="kb_no_server">Выберите сервер</string>
     <string name="kb_ping">пинг %d мс</string>
@@ -746,4 +745,41 @@
     <string name="srv_default_exit">Выход</string>
     <string name="srv_default_entry">Вход</string>
     <string name="srv_menu">Поднять свой сервер</string>
+    <string name="more_servers">Мои серверы</string>
+    <string name="more_servers_sub">Поднять свой VPN</string>
+    <string name="more_groups">Подписки</string>
+    <string name="more_groups_sub">Группы и обновление</string>
+    <string name="more_log">Журнал</string>
+    <string name="more_log_sub">Если что-то не так</string>
+    <string name="more_tools">Бэкап и сеть</string>
+    <string name="more_tools_sub">Сохранить всё, проверки</string>
+    <string name="more_help_sub">Ответы на вопросы</string>
+    <string name="more_about">О Kombain</string>
+    <string name="more_about_sub">Версия и лицензии</string>
+    <string name="kb_actions">Действия</string>
+    <string name="kb_act_edit">Изменить</string>
+    <string name="kb_act_share">Поделиться</string>
+    <string name="kb_act_share_sub">QR-код или ссылка</string>
+    <string name="kb_act_delete">Удалить</string>
+    <string name="kb_add_title">Добавить сервер</string>
+    <string name="kb_add_clip">Вставить из буфера</string>
+    <string name="kb_add_clip_sub">Ссылка vless://, vpn://, подписка…</string>
+    <string name="kb_add_qr">Сканировать QR-код</string>
+    <string name="kb_add_file">Из файла</string>
+    <string name="kb_add_file_sub">.conf WireGuard / Amnezia, .json</string>
+    <string name="kb_add_server_sub">Kombain сам настроит VPS по SSH</string>
+    <string name="kb_add_manual">Создать вручную</string>
+    <string name="kb_add_manual_sub">Выбрать протокол и заполнить поля</string>
+    <string name="ab_tagline">Все протоколы, свои серверы и раздача — в одном приложении</string>
+    <string name="ab_components">Компоненты</string>
+    <string name="ab_battery">Не ограничивать в фоне</string>
+    <string name="ab_battery_sub">Android может отключать VPN для экономии заряда. Нажмите, чтобы разрешить работу в фоне.</string>
+    <string name="ab_license">Лицензия</string>
+    <string name="ab_license_text">Kombain — свободное приложение на лицензии GPL-3.0. Основано на NekoBox for Android (MatsuriDayo) и ядре sing-box; для VLESS Reality используется Xray-core, для AmneziaWG — amneziawg-go. Шрифт Onest — SIL OFL 1.1.</string>
+    <string name="ab_license_btn">Текст лицензии</string>
+    <string name="ab_source_btn">Исходники ядра</string>
+    <string name="ab_plugin">Плагин %s</string>
+    <string name="ab_core_engine">Ядро и маршрутизация</string>
+    <string name="ab_xray_engine">Движок для VLESS Reality</string>
+    <string name="ab_not_bundled">не встроен</string>
 </resources>

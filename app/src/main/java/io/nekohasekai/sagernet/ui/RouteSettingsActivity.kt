@@ -338,6 +338,7 @@ class RouteSettingsActivity(
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+        applyKombainCards()
 
             ViewCompat.setOnApplyWindowInsetsListener(listView, ListListener)
 
