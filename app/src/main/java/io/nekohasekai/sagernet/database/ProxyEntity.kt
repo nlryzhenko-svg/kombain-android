@@ -184,8 +184,8 @@ data class ProxyEntity(
         TYPE_SOCKS -> socksBean!!.protocolName()
         TYPE_HTTP -> if (httpBean!!.isTLS()) "HTTPS" else "HTTP"
         TYPE_SS -> "Shadowsocks"
-        TYPE_VMESS -> if (vmessBean!!.isVLESS) "VLESS" else "VMess"
-        TYPE_TROJAN -> "Trojan"
+        TYPE_VMESS -> (if (vmessBean!!.isVLESS) "VLESS" else "VMess") + if (vmessBean!!.xrayEngine) " · Xray" else ""
+        TYPE_TROJAN -> "Trojan" + if (trojanBean!!.xrayEngine) " · Xray" else ""
         TYPE_TROJAN_GO -> "Trojan-Go"
         TYPE_MIERU -> "Mieru"
         TYPE_NAIVE -> "Naïve"
@@ -310,6 +310,7 @@ data class ProxyEntity(
             TYPE_NAIVE -> true
             TYPE_HYSTERIA -> !hysteriaBean!!.canUseSingBox()
             TYPE_NEKO -> true
+            TYPE_VMESS, TYPE_TROJAN -> (requireBean() as? io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean)?.xrayEngine == true
             else -> false
         }
     }

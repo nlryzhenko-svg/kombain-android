@@ -178,7 +178,8 @@ class ConfigurationFragment @JvmOverloads constructor(
         // Kombain status card (only on the main screen, not in profile pickers)
         val main = activity as? MainActivity
         if (!select && main != null) {
-            main.statusCard = StatusCardController(view, main)
+            myStatusCard = StatusCardController(view, main)
+            main.statusCard = myStatusCard
         } else {
             view.findViewById<View>(R.id.status_card)?.visibility = View.GONE
         }
@@ -269,8 +270,12 @@ class ConfigurationFragment @JvmOverloads constructor(
         }
     }
 
+    private var myStatusCard: StatusCardController? = null
+
     override fun onDestroyView() {
-        (activity as? MainActivity)?.let { if (!select) it.statusCard = null }
+        // only detach our own card: a newer ConfigurationFragment may already own the slot
+        (activity as? MainActivity)?.let { if (it.statusCard === myStatusCard) it.statusCard = null }
+        myStatusCard = null
         super.onDestroyView()
     }
 

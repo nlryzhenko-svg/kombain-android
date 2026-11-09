@@ -23,6 +23,9 @@ import libcore.BoxInstance
 import libcore.Libcore
 import moe.matsuri.nb4a.net.LocalResolverImpl
 import java.io.File
+import io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean
+import io.nekohasekai.sagernet.fmt.v2ray.Xray
+import io.nekohasekai.sagernet.fmt.v2ray.buildXrayConfig
 
 abstract class BoxInstance(
     val profile: ProxyEntity
@@ -70,6 +73,11 @@ abstract class BoxInstance(
                     is NaiveBean -> {
                         initPlugin("naive-plugin")
                         pluginConfigs[port] = profile.type to bean.buildNaiveConfig(port)
+                    }
+
+                    is StandardV2RayBean -> if (bean.xrayEngine) {
+                        if (!Xray.isAvailable()) error("Движок Xray не входит в эту сборку для вашего процессора")
+                        pluginConfigs[port] = profile.type to bean.buildXrayConfig(port)
                     }
 
                     is HysteriaBean -> {
@@ -138,6 +146,20 @@ abstract class BoxInstance(
                         )
 
                         processes.start(commands, envMap)
+                    }
+
+                    bean is StandardV2RayBean && bean.xrayEngine -> {
+                        val configFile = File(
+                            cacheDir, "xray_" + SystemClock.elapsedRealtime() + ".json"
+                        )
+                        configFile.parentFile?.mkdirs()
+                        configFile.writeText(config)
+                        cacheFiles.add(configFile)
+
+                        val commands = mutableListOf(
+                            Xray.executable().absolutePath, "run", "-c", configFile.absolutePath
+                        )
+                        processes.start(commands)
                     }
 
                     bean is NaiveBean -> {

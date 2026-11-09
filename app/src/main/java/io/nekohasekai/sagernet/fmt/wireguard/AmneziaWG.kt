@@ -109,23 +109,6 @@ object AmneziaWG {
                         val ob = outbounds.optJSONObject(i) ?: continue
                         runCatching { XrayOutbound.toLink(ob, name) }.getOrNull()?.let { out.add(it) }
                     }
-                } else if (node.has("last_config") && node.has("site")) {
-                    // Amnezia Xray container: last_config may carry a different SNI than
-                    // the masking site the server was set up with. Offer both variants.
-                    val site = node.optString("site").trim()
-                    val before = out.size
-                    collect(node.opt("last_config"), name, out)
-                    if (site.isNotEmpty()) {
-                        for (link in out.subList(before, out.size).toList()) {
-                            val sni = Regex("[?&]sni=([^&#]*)").find(link)?.groupValues?.get(1)
-                            if (sni != null && android.net.Uri.decode(sni) != site && link.contains("security=reality")) {
-                                out.add(
-                                    link.replace("sni=$sni", "sni=" + android.net.Uri.encode(site))
-                                        .substringBefore("#") + "#" + android.net.Uri.encode("$name · SNI $site")
-                                )
-                            }
-                        }
-                    }
                 } else {
                     node.keys().forEach { collect(node.opt(it), name, out) }
                 }

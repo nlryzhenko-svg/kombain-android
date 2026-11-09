@@ -630,4 +630,6 @@
     <string name="kb_no_server">Выберите сервер</string>
     <string name="kb_ping">пинг %d мс</string>
     <string name="kb_ping_fail">сервер не отвечает</string>
+    <string name="xray_engine">Движок Xray-core</string>
+    <string name="xray_engine_sum">Подключаться через Xray, как Happ и v2rayNG. Включите, если с sing-box пишет «reality verification failed» или нет связи</string>
 </resources>

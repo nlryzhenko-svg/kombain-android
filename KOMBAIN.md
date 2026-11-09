@@ -48,3 +48,13 @@ Android пускает трафик точки доступа мимо VpnServic
 прокси. В настройках Wi-Fi на устройстве-клиенте указывается HTTP-прокси (браузер и
 большинство приложений), а для всего трафика — второй телефон с Kombain/v2rayNG по QR-коду
 (SOCKS5). Полная прозрачная раздача (iptables) возможна только с root.
+
+## Движок Xray-core (с 1.2.0)
+
+Свежие серверы Xray (26.x) отвергают Reality-клиент sing-box 1.12 — в журнале это
+`reality verification failed`. Поэтому в Kombain встроен Xray-core: у профилей
+VLESS/VMess/Trojan есть переключатель «Движок Xray-core». sing-box остаётся
+TUN/маршрутизатором, а такой профиль обслуживает отдельный процесс Xray (тот же движок,
+что в Happ и v2rayNG). Импорт `vpn://` из Amnezia включает его автоматически.
+
+Сборка бинарника: `bash buildScript/lib/xray.sh` → `app/executableSo/<abi>/libxray.so`.

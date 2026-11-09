@@ -1,5 +1,12 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <SwitchPreference
+        app:icon="@drawable/ic_baseline_transform_24"
+        app:key="xrayEngine"
+        app:summary="@string/xray_engine_sum"
+        app:title="@string/xray_engine" />
+
+
     <EditTextPreference
         app:icon="@drawable/ic_social_emoji_symbols"
         app:key="name"

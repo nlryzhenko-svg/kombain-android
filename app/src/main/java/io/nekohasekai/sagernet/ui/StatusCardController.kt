@@ -93,7 +93,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     fun onSpeed(tx: Long, rx: Long) {
         if (state != BaseService.State.Connected) return
         val ctx = card.context
-        val speed = "↓ ${Formatter.formatFileSize(ctx, rx)}/s   ↑ ${Formatter.formatFileSize(ctx, tx)}/s"
+        val speed = "↓ ${Formatter.formatFileSize(ctx, rx)}/с   ↑ ${Formatter.formatFileSize(ctx, tx)}/с"
         detail.text = testResult?.let { "$it   $speed" } ?: speed
     }
 

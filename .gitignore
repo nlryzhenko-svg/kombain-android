@@ -19,3 +19,4 @@ jniLibs/
 # submodules
 /external
 /gomobile/
+/app/executableSo/

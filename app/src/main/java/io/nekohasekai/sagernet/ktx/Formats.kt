@@ -124,7 +124,12 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
                     if (item.contains("[Interface]")) {
                         entities.addAll(io.nekohasekai.sagernet.group.RawUpdater.parseWireGuard(item))
                     } else {
+                        // Amnezia Xray containers are generated for Xray-core: use the same engine
+                        val before = entities.size
                         item.parseLink(entities)
+                        for (i in before until entities.size) {
+                            (entities[i] as? io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean)?.xrayEngine = true
+                        }
                     }
                 }
             }.onFailure {

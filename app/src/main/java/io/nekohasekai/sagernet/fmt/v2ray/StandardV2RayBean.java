@@ -66,6 +66,9 @@ public abstract class StandardV2RayBean extends AbstractBean {
 
     public Integer packetEncoding; // 1:packet 2:xudp
 
+    // Kombain: run this profile through the bundled Xray-core instead of sing-box
+    public Boolean xrayEngine;
+
     @Override
     public void initializeDefaultValues() {
         super.initializeDefaultValues();
@@ -108,11 +111,12 @@ public abstract class StandardV2RayBean extends AbstractBean {
         if (muxPadding == null) muxPadding = false;
         if (muxType == null) muxType = 0;
         if (muxConcurrency == null) muxConcurrency = 1;
+        if (xrayEngine == null) xrayEngine = false;
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(4);
+        output.writeInt(5);
         super.serialize(output);
         output.writeString(uuid);
         output.writeString(encryption);
@@ -165,6 +169,7 @@ public abstract class StandardV2RayBean extends AbstractBean {
         output.writeBoolean(muxPadding);
         output.writeInt(muxType);
         output.writeInt(muxConcurrency);
+        output.writeBoolean(xrayEngine);
     }
 
     @Override
@@ -255,6 +260,9 @@ public abstract class StandardV2RayBean extends AbstractBean {
             muxPadding = input.readBoolean();
             muxType = input.readInt();
             muxConcurrency = input.readInt();
+        }
+        if (version >= 5) {
+            xrayEngine = input.readBoolean();
         }
     }
 

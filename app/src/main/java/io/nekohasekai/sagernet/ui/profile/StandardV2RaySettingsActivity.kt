@@ -51,6 +51,7 @@ abstract class StandardV2RaySettingsActivity : ProfileSettingsActivity<StandardV
     private val muxPadding = pbm.add(PreferenceBinding(Type.Bool, "muxPadding"))
     private val muxType = pbm.add(PreferenceBinding(Type.TextToInt, "muxType"))
     private val muxConcurrency = pbm.add(PreferenceBinding(Type.TextToInt, "muxConcurrency"))
+    private val xrayEngine = pbm.add(PreferenceBinding(Type.Bool, "xrayEngine"))
 
     override fun StandardV2RayBean.init() {
         if (this is TrojanBean) {
