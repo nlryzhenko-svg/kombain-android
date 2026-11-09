@@ -118,8 +118,14 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
         if (startsWith("vpn://")) {
             Logs.d("Try parse AmneziaVPN link")
             runCatching {
-                for (conf in io.nekohasekai.sagernet.fmt.wireguard.AmneziaWG.decodeVpnLink(this)) {
-                    entities.addAll(io.nekohasekai.sagernet.group.RawUpdater.parseWireGuard(conf))
+                val items = io.nekohasekai.sagernet.fmt.wireguard.AmneziaWG.decodeVpnLink(this)
+                if (items.isEmpty()) error("No supported container in AmneziaVPN link")
+                for (item in items) {
+                    if (item.contains("[Interface]")) {
+                        entities.addAll(io.nekohasekai.sagernet.group.RawUpdater.parseWireGuard(item))
+                    } else {
+                        item.parseLink(entities)
+                    }
                 }
             }.onFailure {
                 Logs.w(it)

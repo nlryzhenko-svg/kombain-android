@@ -69,16 +69,20 @@ object AmneziaWG {
 
     /**
      * Decodes an AmneziaVPN share link (vpn://...) — base64url of Qt qCompress()
-     * (4-byte big-endian length + zlib) wrapping a JSON server description —
-     * and returns every WireGuard/AmneziaWG config text found inside.
+     * (4-byte big-endian length + zlib) wrapping a JSON server description.
+     * Returns every profile found inside: WireGuard/AmneziaWG config texts
+     * ("[Interface]...") and share links (vless://, trojan://, ss://, vmess://)
+     * converted from Xray containers.
      */
     fun decodeVpnLink(link: String): List<String> {
         val payload = link.trim().removePrefix("vpn://").trim()
         val raw = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
         val json = runCatching { inflateQt(raw) }.getOrNull() ?: String(raw)
-        val configs = mutableListOf<String>()
-        collectConfigs(JSONObject(json), configs)
-        return configs.distinct()
+        val root = JSONObject(json)
+        val name = root.optString("description").ifBlank { root.optString("hostName") }
+        val items = mutableListOf<String>()
+        collect(root, name, items)
+        return items.distinct()
     }
 
     private fun inflateQt(data: ByteArray): String {
@@ -95,16 +99,28 @@ object AmneziaWG {
         return out.toString("UTF-8")
     }
 
-    private fun collectConfigs(node: Any?, out: MutableList<String>) {
+    private fun collect(node: Any?, name: String, out: MutableList<String>) {
         when (node) {
-            is JSONObject -> node.keys().forEach { collectConfigs(node.opt(it), out) }
-            is JSONArray -> for (i in 0 until node.length()) collectConfigs(node.opt(i), out)
+            is JSONObject -> {
+                val outbounds = node.optJSONArray("outbounds")
+                if (outbounds != null) {
+                    // an Xray client config
+                    for (i in 0 until outbounds.length()) {
+                        val ob = outbounds.optJSONObject(i) ?: continue
+                        runCatching { XrayOutbound.toLink(ob, name) }.getOrNull()?.let { out.add(it) }
+                    }
+                } else {
+                    node.keys().forEach { collect(node.opt(it), name, out) }
+                }
+            }
+
+            is JSONArray -> for (i in 0 until node.length()) collect(node.opt(i), name, out)
             is String -> {
                 if (node.contains("[Interface]")) {
                     out.add(node)
                 } else if (node.trimStart().startsWith("{")) {
                     // last_config is itself a JSON string
-                    runCatching { collectConfigs(JSONObject(node), out) }
+                    runCatching { collect(JSONObject(node), name, out) }
                 }
             }
         }
