@@ -8,9 +8,8 @@ mkdir -p $DIR
 cd $DIR
 
 get_latest_release() {
-  curl --silent "https://api.github.com/repos/$1/releases/latest" | # Get latest release from GitHub api
-    grep '"tag_name":' |                                            # Get tag line
-    sed -E 's/.*"([^"]+)".*/\1/'                                    # Pluck JSON value
+  # Kombain: use git tags instead of the rate-limited GitHub API
+  git ls-remote --tags --refs "https://github.com/$1.git" | awk -F/ '{print $3}' | sort -V | tail -1
 }
 
 ####

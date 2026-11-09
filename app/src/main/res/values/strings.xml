@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">NekoBox</string>
-    <string name="app_name_long" translatable="false">NekoBox for Android</string>
+    <string name="app_name" translatable="false">Kombain</string>
+    <string name="app_name_long" translatable="false">Kombain — VPN-комбайн</string>
     <string name="app_desc">The universal proxy toolchain for Android, written in Kotlin.</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
@@ -579,4 +579,41 @@
     <string name="minimize">Minimize</string>
     <string name="app_list_permission_denied">Unable to read installed apps.\nThis is usually because the system has restricted app read permissions.\nPlease grant permissions in the system settings.</string>
     <string name="open_app_settings">Open System Settings</string>
+
+    <!-- Kombain -->
+    <string name="menu_hotspot">Раздача</string>
+    <string name="hotspot_title">Раздача VPN</string>
+    <string name="hotspot_subtitle">Устройства, подключённые к точке доступа этого телефона, смогут ходить в интернет через ваш VPN.</string>
+    <string name="hotspot_switch">Пускать устройства из сети</string>
+    <string name="hotspot_vpn_on">VPN подключён — трафик пойдёт через туннель</string>
+    <string name="hotspot_vpn_off">VPN выключен — подключитесь на главном экране</string>
+    <string name="hotspot_address_label">Адрес прокси</string>
+    <string name="hotspot_port">порт %d · HTTP и SOCKS5</string>
+    <string name="hotspot_no_network">Нет сети</string>
+    <string name="hotspot_no_network_hint">Включите точку доступа (или подключитесь к Wi-Fi) — адрес появится здесь.</string>
+    <string name="hotspot_hint_switch_off">Включите «Пускать устройства из сети», чтобы прокси стал доступен.</string>
+    <string name="hotspot_hint_vpn_off">Прокси откроется, как только VPN будет подключён.</string>
+    <string name="hotspot_hint_ready">Готово · %1$s (%2$s)</string>
+    <string name="hotspot_copy">Копировать</string>
+    <string name="hotspot_qr">QR-код</string>
+    <string name="hotspot_qr_name">Раздача Kombain</string>
+    <string name="hotspot_copied">Адрес скопирован</string>
+    <string name="hotspot_reloading">Перезапускаю VPN с новыми настройками…</string>
+    <string name="hotspot_refresh">Обновить</string>
+    <string name="hotspot_other">Другие адреса:</string>
+    <string name="hotspot_kind_ap">точка доступа</string>
+    <string name="hotspot_kind_usb">USB-модем</string>
+    <string name="hotspot_kind_wifi">Wi-Fi сеть</string>
+    <string name="hotspot_kind_other">локальная сеть</string>
+    <string name="hotspot_how_title">Как подключить устройство</string>
+    <string name="hotspot_step1">1. Включите точку доступа на этом телефоне.</string>
+    <string name="hotspot_open_settings">Открыть настройки точки доступа</string>
+    <string name="hotspot_step2">2. На другом устройстве подключитесь к этой Wi-Fi сети, откройте её свойства → «Прокси» → «Вручную» и впишите адрес и порт выше. Так работает браузер и большинство приложений (Android, iPhone, Windows, macOS, телевизоры).</string>
+    <string name="hotspot_step3">3. Нужен весь трафик, включая игры и звонки? Поставьте на другой телефон Kombain или v2rayNG и отсканируйте QR-код — он подключится к этому телефону как SOCKS5-сервер.</string>
+    <string name="hotspot_note">Прокси открыт для всех устройств в этой сети. Выключайте раздачу, когда она не нужна, особенно в чужом Wi-Fi.</string>
+    <string name="awg_category">AmneziaWG (обход DPI)</string>
+    <string name="awg_params">Параметры обфускации</string>
+    <string name="awg_dialog_message">Вставьте строки Jc, Jmin, Jmax, S1–S4, H1–H4, I1–I5 из конфига Amnezia — по одной на строку, например «Jc = 4». Пусто — обычный WireGuard.</string>
+    <string name="awg_on">Включено · %s</string>
+    <string name="awg_off">Выключено — обычный WireGuard</string>
 </resources>

@@ -1,0 +1,290 @@
+diff --git a/go.mod b/go.mod
+index 92befc9a..e5c03a2d 100644
+--- a/go.mod
++++ b/go.mod
+@@ -1,6 +1,6 @@
+ module github.com/sagernet/sing-box
+ 
+-go 1.23.1
++go 1.25
+ 
+ require (
+ 	github.com/anytls/sing-anytls v0.0.11
+@@ -133,3 +133,5 @@ require (
+ 	gopkg.in/yaml.v3 v3.0.1 // indirect
+ 	lukechampine.com/blake3 v1.3.0 // indirect
+ )
++
++replace github.com/sagernet/wireguard-go => ../wireguard-go-awg
+diff --git a/go.sum b/go.sum
+index 2cc4a010..9745f4c6 100644
+--- a/go.sum
++++ b/go.sum
+@@ -185,8 +185,6 @@ github.com/sagernet/smux v1.5.50-sing-box-mod.1 h1:XkJcivBC9V4wBjiGXIXZ229aZCU1h
+ github.com/sagernet/smux v1.5.50-sing-box-mod.1/go.mod h1:NjhsCEWedJm7eFLyhuBgIEzwfhRmytrUoiLluxs5Sk8=
+ github.com/sagernet/tailscale v1.80.3-sing-box-1.12-mod.2 h1:MO7s4ni2bSfAOhcan2rdQSWCztkMXmqyg6jYPZp8bEE=
+ github.com/sagernet/tailscale v1.80.3-sing-box-1.12-mod.2/go.mod h1:EBxXsWu4OH2ELbQLq32WoBeIubG8KgDrg4/Oaxjs6lI=
+-github.com/sagernet/wireguard-go v0.0.1-beta.7 h1:ltgBwYHfr+9Wz1eG59NiWnHrYEkDKHG7otNZvu85DXI=
+-github.com/sagernet/wireguard-go v0.0.1-beta.7/go.mod h1:jGXij2Gn2wbrWuYNUmmNhf1dwcZtvyAvQoe8Xd8MbUo=
+ github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854 h1:6uUiZcDRnZSAegryaUGwPC/Fj13JSHwiTftrXhMmYOc=
+ github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854/go.mod h1:LtfoSK3+NG57tvnVEHgcuBW9ujgE8enPSgzgwStwCAA=
+ github.com/spf13/cobra v1.9.1 h1:CXSaggrXdbHK9CF+8ywj8Amf7PBRmPCOJugH954Nnlo=
+diff --git a/option/wireguard.go b/option/wireguard.go
+index 43d3139c..4c9f6623 100644
+--- a/option/wireguard.go
++++ b/option/wireguard.go
+@@ -16,9 +16,29 @@ type WireGuardEndpointOptions struct {
+ 	Peers      []WireGuardPeer                  `json:"peers,omitempty"`
+ 	UDPTimeout badoption.Duration               `json:"udp_timeout,omitempty"`
+ 	Workers    int                              `json:"workers,omitempty"`
++	AmneziaWGOptions
+ 	DialerOptions
+ }
+ 
++type AmneziaWGOptions struct {
++	Jc   int    `json:"jc,omitempty"`
++	Jmin int    `json:"jmin,omitempty"`
++	Jmax int    `json:"jmax,omitempty"`
++	S1   int    `json:"s1,omitempty"`
++	S2   int    `json:"s2,omitempty"`
++	S3   int    `json:"s3,omitempty"`
++	S4   int    `json:"s4,omitempty"`
++	H1   string `json:"h1,omitempty"`
++	H2   string `json:"h2,omitempty"`
++	H3   string `json:"h3,omitempty"`
++	H4   string `json:"h4,omitempty"`
++	I1   string `json:"i1,omitempty"`
++	I2   string `json:"i2,omitempty"`
++	I3   string `json:"i3,omitempty"`
++	I4   string `json:"i4,omitempty"`
++	I5   string `json:"i5,omitempty"`
++}
++
+ type WireGuardPeer struct {
+ 	Address                     string                           `json:"address,omitempty"`
+ 	Port                        uint16                           `json:"port,omitempty"`
+@@ -44,6 +64,7 @@ type LegacyWireGuardOutboundOptions struct {
+ 	Workers       int         `json:"workers,omitempty"`
+ 	MTU           uint32      `json:"mtu,omitempty"`
+ 	Network       NetworkList `json:"network,omitempty"`
++	AmneziaWGOptions
+ }
+ 
+ type LegacyWireGuardPeer struct {
+diff --git a/protocol/wireguard/amnezia.go b/protocol/wireguard/amnezia.go
+new file mode 100644
+index 00000000..9d2680f5
+--- /dev/null
++++ b/protocol/wireguard/amnezia.go
+@@ -0,0 +1,15 @@
++package wireguard
++
++import (
++	"github.com/sagernet/sing-box/option"
++	"github.com/sagernet/sing-box/transport/wireguard"
++)
++
++func amneziaToTransport(o option.AmneziaWGOptions) wireguard.AmneziaOptions {
++	return wireguard.AmneziaOptions{
++		Jc: o.Jc, Jmin: o.Jmin, Jmax: o.Jmax,
++		S1: o.S1, S2: o.S2, S3: o.S3, S4: o.S4,
++		H1: o.H1, H2: o.H2, H3: o.H3, H4: o.H4,
++		I1: o.I1, I2: o.I2, I3: o.I3, I4: o.I4, I5: o.I5,
++	}
++}
+diff --git a/protocol/wireguard/endpoint.go b/protocol/wireguard/endpoint.go
+index 4165d126..0d88119d 100644
+--- a/protocol/wireguard/endpoint.go
++++ b/protocol/wireguard/endpoint.go
+@@ -100,6 +100,7 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
+ 			}
+ 		}),
+ 		Workers: options.Workers,
++		Amnezia: amneziaToTransport(options.AmneziaWGOptions),
+ 	})
+ 	if err != nil {
+ 		return nil, err
+diff --git a/protocol/wireguard/init.go b/protocol/wireguard/init.go
+index 848c113b..95401afc 100644
+--- a/protocol/wireguard/init.go
++++ b/protocol/wireguard/init.go
+@@ -1,10 +1,4 @@
+ package wireguard
+ 
+-import (
+-	"github.com/sagernet/sing-box/common/dialer"
+-	"github.com/sagernet/wireguard-go/conn"
+-)
+-
+-func init() {
+-	dialer.WgControlFns = conn.ControlFns
+-}
++// kombain: the AmneziaWG runtime keeps its listen-config control functions
++// private, and WireGuard sockets here always go through the protected dialer.
+diff --git a/protocol/wireguard/outbound.go b/protocol/wireguard/outbound.go
+index 129e69b8..7583512f 100644
+--- a/protocol/wireguard/outbound.go
++++ b/protocol/wireguard/outbound.go
+@@ -102,6 +102,7 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
+ 		},
+ 		Peers:   peers,
+ 		Workers: options.Workers,
++		Amnezia: amneziaToTransport(options.AmneziaWGOptions),
+ 	})
+ 	if err != nil {
+ 		return nil, err
+diff --git a/transport/wireguard/client_bind.go b/transport/wireguard/client_bind.go
+index f1081855..b93f1b89 100644
+--- a/transport/wireguard/client_bind.go
++++ b/transport/wireguard/client_bind.go
+@@ -134,7 +134,9 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
+ 		return
+ 	}
+ 	sizes[0] = n
+-	if n > 3 {
++	// kombain: strip reserved bytes only when reserved is in use (WARP);
++	// AmneziaWG uses custom 4-byte message headers that must stay intact.
++	if n > 3 && c.hasReserved() {
+ 		b := packets[0]
+ 		common.ClearArray(b[1:4])
+ 	}
+@@ -162,7 +164,19 @@ func (c *ClientBind) SetMark(mark uint32) error {
+ 	return nil
+ }
+ 
+-func (c *ClientBind) Send(bufs [][]byte, ep conn.Endpoint) error {
++func (c *ClientBind) hasReserved() bool {
++	if c.reserved != [3]uint8{} {
++		return true
++	}
++	for _, r := range c.reservedForEndpoint {
++		if r != [3]uint8{} {
++			return true
++		}
++	}
++	return false
++}
++
++func (c *ClientBind) Send(bufs [][]byte, ep conn.Endpoint, offset int) error {
+ 	udpConn, err := c.connect()
+ 	if err != nil {
+ 		c.pauseManager.WaitActive()
+@@ -171,12 +185,17 @@ func (c *ClientBind) Send(bufs [][]byte, ep conn.Endpoint) error {
+ 	}
+ 	destination := netip.AddrPort(ep.(remoteEndpoint))
+ 	for _, b := range bufs {
++		if offset > 0 {
++			b = b[offset:]
++		}
+ 		if len(b) > 3 {
+ 			reserved, loaded := c.reservedForEndpoint[destination]
+ 			if !loaded {
+ 				reserved = c.reserved
+ 			}
+-			copy(b[1:4], reserved[:])
++			if reserved != [3]uint8{} {
++				copy(b[1:4], reserved[:])
++			}
+ 		}
+ 		_, err = udpConn.WriteToUDPAddrPort(b, destination)
+ 		if err != nil {
+diff --git a/transport/wireguard/endpoint.go b/transport/wireguard/endpoint.go
+index 3801640f..bea9acc8 100644
+--- a/transport/wireguard/endpoint.go
++++ b/transport/wireguard/endpoint.go
+@@ -47,6 +47,7 @@ func NewEndpoint(options EndpointOptions) (*Endpoint, error) {
+ 	if options.ListenPort != 0 {
+ 		ipcConf += "\nlisten_port=" + F.ToString(options.ListenPort)
+ 	}
++	ipcConf += options.Amnezia.IpcLines()
+ 	var peers []peerConfig
+ 	for peerIndex, rawPeer := range options.Peers {
+ 		peer := peerConfig{
+@@ -141,10 +142,10 @@ func (e *Endpoint) Start(resolve bool) error {
+ 		return nil
+ 	}
+ 	var bind conn.Bind
+-	wgListener, isWgListener := common.Cast[conn.Listener](e.options.Dialer)
+-	if isWgListener {
+-		bind = conn.NewStdNetBind(wgListener)
+-	} else {
++	// kombain: always use the dialer-backed bind so sockets stay protected
++	// from the Android VPN loop (the AmneziaWG runtime has no Listener API).
++	isWgListener := false
++	{
+ 		var (
+ 			isConnect   bool
+ 			connectAddr netip.AddrPort
+diff --git a/transport/wireguard/endpoint_options.go b/transport/wireguard/endpoint_options.go
+index bb9a46e6..9e16c8d2 100644
+--- a/transport/wireguard/endpoint_options.go
++++ b/transport/wireguard/endpoint_options.go
+@@ -3,6 +3,8 @@ package wireguard
+ import (
+ 	"context"
+ 	"net/netip"
++	"strconv"
++	"strings"
+ 	"time"
+ 
+ 	"github.com/sagernet/sing-tun"
+@@ -27,6 +29,59 @@ type EndpointOptions struct {
+ 	ResolvePeer  func(domain string) (netip.Addr, error)
+ 	Peers        []PeerOptions
+ 	Workers      int
++	Amnezia      AmneziaOptions
++}
++
++// AmneziaOptions carries AmneziaWG obfuscation parameters. All zero = plain WireGuard.
++type AmneziaOptions struct {
++	Jc   int
++	Jmin int
++	Jmax int
++	S1   int
++	S2   int
++	S3   int
++	S4   int
++	H1   string
++	H2   string
++	H3   string
++	H4   string
++	I1   string
++	I2   string
++	I3   string
++	I4   string
++	I5   string
++}
++
++func (o AmneziaOptions) IpcLines() string {
++	var b strings.Builder
++	num := func(k string, v int) {
++		if v != 0 {
++			b.WriteString("\n" + k + "=" + strconv.Itoa(v))
++		}
++	}
++	str := func(k string, v string) {
++		v = strings.TrimSpace(v)
++		if v != "" {
++			b.WriteString("\n" + k + "=" + v)
++		}
++	}
++	num("jc", o.Jc)
++	num("jmin", o.Jmin)
++	num("jmax", o.Jmax)
++	num("s1", o.S1)
++	num("s2", o.S2)
++	num("s3", o.S3)
++	num("s4", o.S4)
++	str("h1", o.H1)
++	str("h2", o.H2)
++	str("h3", o.H3)
++	str("h4", o.H4)
++	str("i1", o.I1)
++	str("i2", o.I2)
++	str("i3", o.I3)
++	str("i4", o.I4)
++	str("i5", o.I5)
++	return b.String()
+ }
+ 
+ type PeerOptions struct {

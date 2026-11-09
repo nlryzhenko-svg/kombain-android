@@ -50,4 +50,12 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/awg_category">
+        <EditTextPreference
+            app:dialogMessage="@string/awg_dialog_message"
+            app:icon="@drawable/ic_baseline_fingerprint_24"
+            app:key="amneziaParams"
+            app:title="@string/awg_params" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

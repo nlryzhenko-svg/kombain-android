@@ -37,5 +37,6 @@ fun buildSingBoxOutboundWireguardBean(bean: WireGuardBean): SingBoxOptions.Outbo
         pre_shared_key = bean.peerPreSharedKey
         mtu = bean.mtu
         if (bean.reserved.isNotBlank()) reserved = genReserved(bean.reserved)
+        AmneziaWG.applyTo(this, bean.amneziaParams)
     }
 }

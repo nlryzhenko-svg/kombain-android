@@ -482,4 +482,23 @@
         <item name="windowNoTitle">true</item>
     </style>
 
+    <style name="Theme.SagerNet.Kombain">
+        <item name="colorPrimary">@color/kombain_primary</item>
+        <item name="colorPrimaryDark">@color/kombain_primary_dark</item>
+        <item name="colorAccent">@color/kombain_accent</item>
+        <item name="colorMaterial100">@color/kombain_100</item>
+        <item name="colorMaterial300">@color/kombain_300</item>
+        <item name="fabColorBackground">@color/kombain_fab</item>
+        <item name="accentOrTextSecondary">@color/kombain_fab</item>
+        <item name="accentOrTextPrimary">@color/kombain_fab</item>
+    </style>
+
+    <style name="Theme.SagerNet.Dialog.Kombain">
+        <item name="colorPrimary">@color/kombain_primary</item>
+        <item name="colorPrimaryDark">@color/kombain_primary_dark</item>
+        <item name="colorAccent">@color/kombain_accent</item>
+        <item name="colorMaterial100">@color/kombain_100</item>
+        <item name="colorMaterial300">@color/kombain_300</item>
+    </style>
+
 </resources>

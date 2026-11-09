@@ -115,7 +115,16 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
             throw SubscriptionFoundException(this)
         }
 
-        if (startsWith("sn://")) {
+        if (startsWith("vpn://")) {
+            Logs.d("Try parse AmneziaVPN link")
+            runCatching {
+                for (conf in io.nekohasekai.sagernet.fmt.wireguard.AmneziaWG.decodeVpnLink(this)) {
+                    entities.addAll(io.nekohasekai.sagernet.group.RawUpdater.parseWireGuard(conf))
+                }
+            }.onFailure {
+                Logs.w(it)
+            }
+        } else if (startsWith("sn://")) {
             Logs.d("Try parse universal link: $this")
             runCatching {
                 entities.add(parseUniversal(this))
