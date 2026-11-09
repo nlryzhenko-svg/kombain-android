@@ -41,7 +41,11 @@ func (g *geoip) Rules(countryCode string) ([]option.HeadlessRule, error) {
 	ipNets := countryMap[strings.ToLower(countryCode)]
 
 	if len(ipNets) == 0 {
-		return nil, fmt.Errorf("no networks found for country code: %s", countryCode)
+		// Kombain: unknown country code must not take the whole VPN down — match nothing instead
+		return []option.HeadlessRule{{
+			Type:           C.RuleTypeDefault,
+			DefaultOptions: option.DefaultHeadlessRule{IPCIDR: []string{"255.255.255.255/32"}},
+		}}, nil
 	}
 
 	var headlessRule option.DefaultHeadlessRule

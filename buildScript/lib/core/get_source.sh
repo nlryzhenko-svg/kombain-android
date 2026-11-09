@@ -13,6 +13,7 @@ if [ ! -d "sing-box" ]; then
 fi
 pushd sing-box
 git checkout -f "$COMMIT_SING_BOX"
+git clean -fdq
 # Kombain: AmneziaWG obfuscation (jc/jmin/jmax/s1-s4/h1-h4/i1-i5)
 git apply --whitespace=nowarn "$SRC_ROOT/buildScript/lib/core/patches/sing-box-amneziawg.patch"
 popd
