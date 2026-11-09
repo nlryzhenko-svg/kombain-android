@@ -492,6 +492,8 @@
         <item name="accentOrTextSecondary">@color/kombain_fab</item>
         <item name="accentOrTextPrimary">@color/kombain_fab</item>
         <item name="selectedColorPrimary">@color/kombain_fab</item>
+        <item name="primaryOrTextPrimary">@color/kombain_fab</item>
+        <item name="primaryOrTextSecondary">@color/kombain_fab</item>
         <item name="android:colorBackground">@color/kombain_bg</item>
         <item name="android:windowBackground">@color/kombain_bg</item>
         <item name="android:statusBarColor">@color/kombain_bg</item>
@@ -505,6 +507,8 @@
         <item name="tabIndicatorColor">@color/kombain_fab</item>
         <item name="tabRippleColor">@color/kombain_300</item>
         <item name="whiteOrTextPrimary">@color/kombain_text</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.Kombain.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Kombain.Dialog</item>
     </style>
 
     <style name="Theme.SagerNet.Dialog.Kombain">
@@ -516,15 +520,15 @@
     </style>
 
     <style name="ThemeOverlay.Kombain.Toolbar" parent="ThemeOverlay.MaterialComponents.Toolbar.Surface">
-        <item name="colorControlNormal">?android:attr/textColorPrimary</item>
-        <item name="android:textColorPrimary">?android:attr/textColorPrimary</item>
-        <item name="actionMenuTextColor">?android:attr/textColorPrimary</item>
+        <item name="colorControlNormal">@color/kombain_text</item>
+        <item name="android:textColorPrimary">@color/kombain_text</item>
+        <item name="actionMenuTextColor">@color/kombain_text</item>
     </style>
 
     <style name="TextAppearance.Kombain.Title" parent="TextAppearance.MaterialComponents.Headline5">
         <item name="android:textSize">24sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:textColor">?android:attr/textColorPrimary</item>
+        <item name="android:textColor">@color/kombain_text</item>
         <item name="android:letterSpacing">-0.01</item>
     </style>
 
@@ -534,6 +538,17 @@
         <item name="itemTextColor">@color/kombain_nav_item</item>
         <item name="labelVisibilityMode">labeled</item>
         <item name="elevation">0dp</item>
+    </style>
+
+    <style name="ThemeOverlay.Kombain.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog.SagerNet">
+        <item name="colorPrimary">@color/kombain_fab</item>
+        <item name="colorAccent">@color/kombain_fab</item>
+        <item name="colorSurface">@color/kombain_tile</item>
+        <item name="shapeAppearanceMediumComponent">@style/Kombain.DialogShape</item>
+    </style>
+
+    <style name="Kombain.DialogShape" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+        <item name="cornerSize">20dp</item>
     </style>
 
 </resources>

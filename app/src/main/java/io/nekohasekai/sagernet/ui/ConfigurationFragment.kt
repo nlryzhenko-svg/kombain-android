@@ -1519,6 +1519,7 @@ class ConfigurationFragment @JvmOverloads constructor(
                                 DataStore.selectedProxy = proxyEntity.id
                                 onMainDispatcher {
                                     selectedView.visibility = View.VISIBLE
+                                    (activity as? MainActivity)?.statusCard?.refreshProfile()
                                 }
                             }
 
