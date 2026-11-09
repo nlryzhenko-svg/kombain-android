@@ -616,4 +616,18 @@
     <string name="awg_dialog_message">Вставьте строки Jc, Jmin, Jmax, S1–S4, H1–H4, I1–I5 из конфига Amnezia — по одной на строку, например «Jc = 4». Пусто — обычный WireGuard.</string>
     <string name="awg_on">Включено · %s</string>
     <string name="awg_off">Выключено — обычный WireGuard</string>
+    <string name="bn_servers">Серверы</string>
+    <string name="bn_route">Маршруты</string>
+    <string name="bn_settings">Настройки</string>
+    <string name="bn_more">Ещё</string>
+    <string name="kb_toggle">Включить или выключить VPN</string>
+    <string name="kb_connected">Подключено</string>
+    <string name="kb_connecting">Подключение…</string>
+    <string name="kb_stopping">Отключение…</string>
+    <string name="kb_disconnected">Не подключено</string>
+    <string name="kb_hint_off">Включите тумблер, чтобы подключиться</string>
+    <string name="kb_hint_connecting">Устанавливаю туннель…</string>
+    <string name="kb_no_server">Выберите сервер</string>
+    <string name="kb_ping">пинг %d мс</string>
+    <string name="kb_ping_fail">сервер не отвечает</string>
 </resources>

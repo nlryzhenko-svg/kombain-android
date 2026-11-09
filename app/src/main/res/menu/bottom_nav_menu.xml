@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_configuration"
+        android:icon="@drawable/ic_kombain_servers"
+        android:title="@string/bn_servers" />
+    <item
+        android:id="@+id/nav_hotspot"
+        android:icon="@drawable/ic_hotspot_24"
+        android:title="@string/menu_hotspot" />
+    <item
+        android:id="@+id/nav_route"
+        android:icon="@drawable/ic_maps_directions"
+        android:title="@string/bn_route" />
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@drawable/ic_action_settings"
+        android:title="@string/bn_settings" />
+    <item
+        android:id="@+id/nav_more"
+        android:icon="@drawable/ic_kombain_more"
+        android:title="@string/bn_more" />
+</menu>

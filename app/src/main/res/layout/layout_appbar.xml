@@ -3,17 +3,19 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/appbar"
     android:layout_width="match_parent"
-    android:layout_height="?attr/actionBarSize"
-    android:background="?attr/colorPrimary"
-    android:elevation="4dp">
+    android:layout_height="64dp"
+    android:background="?android:attr/colorBackground"
+    app:elevation="0dp">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="?attr/colorPrimary"
-        android:theme="?actionBarTheme"
+        android:background="?android:attr/colorBackground"
+        android:paddingStart="4dp"
+        android:theme="@style/ThemeOverlay.Kombain.Toolbar"
         android:touchscreenBlocksFocus="false"
         app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
-        app:title="@string/app_name" />
+        app:title="@string/app_name"
+        app:titleTextAppearance="@style/TextAppearance.Kombain.Title" />
 </com.google.android.material.appbar.AppBarLayout>

@@ -175,6 +175,14 @@ class ConfigurationFragment @JvmOverloads constructor(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Kombain status card (only on the main screen, not in profile pickers)
+        val main = activity as? MainActivity
+        if (!select && main != null) {
+            main.statusCard = StatusCardController(view, main)
+        } else {
+            view.findViewById<View>(R.id.status_card)?.visibility = View.GONE
+        }
+
         if (!select) {
             toolbar.inflateMenu(R.menu.add_profile_menu)
             toolbar.setOnMenuItemClickListener(this)
@@ -259,6 +267,11 @@ class ConfigurationFragment @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    override fun onDestroyView() {
+        (activity as? MainActivity)?.let { if (!select) it.statusCard = null }
+        super.onDestroyView()
     }
 
     override fun onDestroy() {
@@ -1158,7 +1171,7 @@ class ConfigurationFragment @JvmOverloads constructor(
             if (!::proxyGroup.isInitialized) return
 
             configurationListView = view.findViewById(R.id.configuration_list)
-            layoutManager = FixedLinearLayoutManager(configurationListView)
+            layoutManager = io.nekohasekai.sagernet.ktx.FixedGridLayoutManager(configurationListView)
             configurationListView.layoutManager = layoutManager
             adapter = ConfigurationAdapter()
             ProfileManager.addListener(adapter!!)
@@ -1171,7 +1184,7 @@ class ConfigurationFragment @JvmOverloads constructor(
                 undoManager = UndoSnackbarManager(activity as MainActivity, adapter!!)
 
                 ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
-                    ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.START
+                    ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT, 0
                 ) {
                     override fun getSwipeDirs(
                         recyclerView: RecyclerView,

@@ -13,18 +13,37 @@
         android:layout_height="match_parent"
         android:clipChildren="false">
 
-        <androidx.coordinatorlayout.widget.CoordinatorLayout
-            android:id="@+id/fragment_holder"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <androidx.coordinatorlayout.widget.CoordinatorLayout
+                android:id="@+id/fragment_holder"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/kombain_tile_stroke" />
+
+            <com.google.android.material.bottomnavigation.BottomNavigationView
+                android:id="@+id/bottom_nav"
+                style="@style/Kombain.BottomNav"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:menu="@menu/bottom_nav_menu" />
+        </LinearLayout>
 
         <!-- We double trackThickness as half of it will be invisible -->
         <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/fabProgress"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:max="1"
-            android:visibility="invisible"
             app:indicatorColor="?colorMaterial100"
             app:layout_anchor="@+id/fab"
             app:layout_anchorGravity="center"
@@ -36,6 +55,7 @@
             android:id="@+id/fab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:elevation="6dp"
             android:nextFocusDown="@+id/stats"
             app:backgroundTint="?fabColorBackground"
@@ -47,6 +67,7 @@
             android:id="@+id/stats"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:visibility="gone"
             android:layout_gravity="bottom"
             android:nextFocusUp="@+id/fab"
             app:backgroundTint="?colorMaterial300"

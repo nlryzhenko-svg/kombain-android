@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import androidx.core.view.GravityCompat
 import android.os.RemoteException
 import android.view.KeyEvent
 import android.view.MenuItem
@@ -75,6 +77,18 @@ class MainActivity : ThemedActivity(),
         }
         navigation.setNavigationItemSelectedListener(this)
 
+        // Kombain bottom navigation
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            if (syncingBottomNav) return@setOnItemSelectedListener true
+            if (item.itemId == R.id.nav_more) {
+                binding.drawerLayout.openDrawer(GravityCompat.START)
+                false
+            } else {
+                displayFragmentWithId(item.itemId)
+            }
+        }
+        binding.bottomNav.setOnItemReselectedListener { }
+
         if (savedInstanceState == null) {
             displayFragmentWithId(R.id.nav_configuration)
         }
@@ -86,11 +100,7 @@ class MainActivity : ThemedActivity(),
             }
         }
 
-        binding.fab.setOnClickListener {
-            if (DataStore.serviceState.canStop) SagerNet.stopService() else connect.launch(
-                null
-            )
-        }
+        binding.fab.setOnClickListener { toggleService() }
         binding.stats.setOnClickListener { if (DataStore.serviceState.connected) binding.stats.testConnection() }
 
         setContentView(binding.root)
@@ -313,14 +323,7 @@ class MainActivity : ThemedActivity(),
 
     @SuppressLint("CommitTransaction")
     fun displayFragment(fragment: ToolbarFragment) {
-        if (fragment is ConfigurationFragment) {
-            binding.stats.allowShow = true
-            binding.fab.show()
-        } else if (!DataStore.showBottomBar) {
-            binding.stats.allowShow = false
-            binding.stats.performHide()
-            binding.fab.hide()
-        }
+        binding.stats.allowShow = false
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_holder, fragment)
             .commitAllowingStateLoss()
@@ -345,8 +348,25 @@ class MainActivity : ThemedActivity(),
 
             else -> return false
         }
-        navigation.menu.findItem(id).isChecked = true
+        navigation.menu.findItem(id)?.isChecked = true
+        if (binding.bottomNav.menu.findItem(id) != null && binding.bottomNav.selectedItemId != id) {
+            syncingBottomNav = true
+            binding.bottomNav.selectedItemId = id
+            syncingBottomNav = false
+        } else if (binding.bottomNav.menu.findItem(id) == null) {
+            // a drawer-only screen: highlight "Ещё"
+            syncingBottomNav = true
+            binding.bottomNav.menu.findItem(R.id.nav_more)?.isChecked = true
+            syncingBottomNav = false
+        }
         return true
+    }
+
+    private var syncingBottomNav = false
+    var statusCard: StatusCardController? = null
+
+    fun toggleService() {
+        if (DataStore.serviceState.canStop) SagerNet.stopService() else connect.launch(null)
     }
 
     private fun changeState(
@@ -358,14 +378,15 @@ class MainActivity : ThemedActivity(),
 
         binding.fab.changeState(state, DataStore.serviceState, animate)
         binding.stats.changeState(state)
+        binding.fab.visibility = View.GONE
+        binding.stats.visibility = View.GONE
+        statusCard?.onState(state)
         if (msg != null) snackbar(getString(R.string.vpn_error, msg)).show()
     }
 
     override fun snackbarInternal(text: CharSequence): Snackbar {
         return Snackbar.make(binding.coordinator, text, Snackbar.LENGTH_LONG).apply {
-            if (binding.fab.isShown) {
-                anchorView = binding.fab
-            }
+            anchorView = binding.bottomNav
             // TODO
         }
     }
@@ -397,6 +418,7 @@ class MainActivity : ThemedActivity(),
     // ONLY do UI update here, write DB in bg process
     override fun cbSpeedUpdate(stats: SpeedDisplayData) {
         binding.stats.updateSpeed(stats.txRateProxy, stats.rxRateProxy)
+        statusCard?.onSpeed(stats.txRateProxy, stats.rxRateProxy)
     }
 
     override fun cbTrafficUpdate(data: TrafficData) {
@@ -418,6 +440,7 @@ class MainActivity : ThemedActivity(),
     override fun onPreferenceDataStoreChanged(store: PreferenceDataStore, key: String) {
         when (key) {
             Key.SERVICE_MODE -> onBinderDied()
+            Key.PROFILE_ID, Key.PROFILE_CURRENT -> statusCard?.refreshProfile()
             Key.PROXY_APPS, Key.BYPASS_MODE, Key.INDIVIDUAL -> {
                 if (DataStore.serviceState.canStop) {
                     snackbar(getString(R.string.need_reload)).setAction(R.string.apply) {

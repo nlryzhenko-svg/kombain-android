@@ -12,12 +12,14 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
+    <include layout="@layout/layout_status_card" />
+
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/group_tab"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?colorPrimary"
-        android:elevation="4dp"
+        android:background="?android:attr/colorBackground"
+        android:elevation="0dp"
         android:visibility="gone"
         app:tabIndicatorColor="?tabIndicatorColor"
         app:tabIndicatorFullWidth="false"

@@ -72,3 +72,15 @@ class FixedLinearLayoutManager(val recyclerView: RecyclerView) :
     }
 
 }
+
+/** Kombain: two-column server tiles. */
+class FixedGridLayoutManager(recyclerView: RecyclerView, spanCount: Int = 2) :
+    androidx.recyclerview.widget.GridLayoutManager(recyclerView.context, spanCount) {
+
+    override fun onLayoutChildren(recycler: RecyclerView.Recycler?, state: RecyclerView.State?) {
+        try {
+            super.onLayoutChildren(recycler, state)
+        } catch (ignored: IndexOutOfBoundsException) {
+        }
+    }
+}

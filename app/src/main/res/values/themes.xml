@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.SagerNet" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="actionBarStyle">@style/Widget.MaterialComponents.ActionBar.Solid</item>
@@ -491,6 +491,20 @@
         <item name="fabColorBackground">@color/kombain_fab</item>
         <item name="accentOrTextSecondary">@color/kombain_fab</item>
         <item name="accentOrTextPrimary">@color/kombain_fab</item>
+        <item name="selectedColorPrimary">@color/kombain_fab</item>
+        <item name="android:colorBackground">@color/kombain_bg</item>
+        <item name="android:windowBackground">@color/kombain_bg</item>
+        <item name="android:statusBarColor">@color/kombain_bg</item>
+        <item name="android:navigationBarColor">@color/kombain_tile</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/kombain_light_bars</item>
+        <item name="android:textColorPrimary">@color/kombain_text</item>
+        <item name="android:textColorSecondary">@color/kombain_text2</item>
+        <item name="colorSurface">@color/kombain_tile</item>
+        <item name="tabTextColor">@color/kombain_text2</item>
+        <item name="tabSelectedTextColor">@color/kombain_fab</item>
+        <item name="tabIndicatorColor">@color/kombain_fab</item>
+        <item name="tabRippleColor">@color/kombain_300</item>
+        <item name="whiteOrTextPrimary">@color/kombain_text</item>
     </style>
 
     <style name="Theme.SagerNet.Dialog.Kombain">
@@ -499,6 +513,27 @@
         <item name="colorAccent">@color/kombain_accent</item>
         <item name="colorMaterial100">@color/kombain_100</item>
         <item name="colorMaterial300">@color/kombain_300</item>
+    </style>
+
+    <style name="ThemeOverlay.Kombain.Toolbar" parent="ThemeOverlay.MaterialComponents.Toolbar.Surface">
+        <item name="colorControlNormal">?android:attr/textColorPrimary</item>
+        <item name="android:textColorPrimary">?android:attr/textColorPrimary</item>
+        <item name="actionMenuTextColor">?android:attr/textColorPrimary</item>
+    </style>
+
+    <style name="TextAppearance.Kombain.Title" parent="TextAppearance.MaterialComponents.Headline5">
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="Kombain.BottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
+        <item name="android:background">@color/kombain_tile</item>
+        <item name="itemIconTint">@color/kombain_nav_item</item>
+        <item name="itemTextColor">@color/kombain_nav_item</item>
+        <item name="labelVisibilityMode">labeled</item>
+        <item name="elevation">0dp</item>
     </style>
 
 </resources>

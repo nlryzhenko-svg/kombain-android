@@ -2,4 +2,13 @@
 <resources>
     <color name="fab_color_progress">@color/material_light_white</color>
     <color name="preference_simple_menu_background">#303030</color>
+    <color name="kombain_bg">#0E1415</color>
+    <color name="kombain_tile">#172124</color>
+    <color name="kombain_tile_stroke">#24FFFFFF</color>
+    <color name="kombain_text">#E8F3F1</color>
+    <color name="kombain_text2">#93A8AC</color>
+    <color name="kombain_card">#0E8F69</color>
+    <color name="kombain_card_off">#2A3A3E</color>
+    <color name="kombain_on_card">#F1FFF9</color>
+    <bool name="kombain_light_bars">false</bool>
 </resources>
