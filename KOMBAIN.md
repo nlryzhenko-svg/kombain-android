@@ -58,3 +58,15 @@ TUN/маршрутизатором, а такой профиль обслужи�
 что в Happ и v2rayNG). Импорт `vpn://` из Amnezia включает его автоматически.
 
 Сборка бинарника: `bash buildScript/lib/xray.sh` → `app/executableSo/<abi>/libxray.so`.
+
+## Свой сервер из приложения (с 1.4.0)
+
+«Ещё → Мои серверы» → «Поднять сервер». Kombain заходит на VPS по SSH (пароль или ключ;
+root или пользователь с sudo), загружает `app/src/main/assets/kombain/kombain-node.sh` и
+ставит Xray (VLESS + Reality) и Hysteria2 как службы systemd. Режимы: одна нода или каскад
+(вход в РФ → выход за рубежом; на входе `geosite:category-ru`/`geoip:ru` идут напрямую,
+Hysteria2 передаёт трафик в Xray, поэтому маршрутизация общая). Профили импортируются в
+отдельную группу, VLESS — с движком Xray. Доступы к серверам шифруются ключом из Android
+Keystore. На сервере: `/etc/kombain`, `/usr/local/bin/kombain-{xray,hysteria}`,
+службы `kombain-xray` и `kombain-hysteria`. Скрипт можно запускать и вручную:
+`bash kombain-node.sh install --host IP [--role entry --exit-link vless://…]`.

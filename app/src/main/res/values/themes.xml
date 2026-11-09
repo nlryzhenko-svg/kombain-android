@@ -551,4 +551,10 @@
         <item name="cornerSize">20dp</item>
     </style>
 
+    <style name="ThemeOverlay.Kombain.Form" parent="">
+        <item name="colorPrimary">@color/kombain_fab</item>
+        <item name="colorAccent">@color/kombain_fab</item>
+        <item name="colorSecondary">@color/kombain_fab</item>
+    </style>
+
 </resources>

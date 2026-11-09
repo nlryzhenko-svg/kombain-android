@@ -96,6 +96,8 @@ class MainActivity : ThemedActivity(),
             val current = supportFragmentManager.findFragmentById(R.id.fragment_holder)
             if (current is ConfigurationFragment) {
                 moveTaskToBack(true)
+            } else if (current is ServerWizardFragment) {
+                displayFragment(MyServersFragment())
             } else if (current is HelpFragment || current is SettingsFragment) {
                 // help and advanced settings are opened from Kombain settings
                 displayFragmentWithId(R.id.nav_settings)
@@ -350,6 +352,7 @@ class MainActivity : ThemedActivity(),
 
             R.id.nav_about -> displayFragment(AboutFragment())
             R.id.nav_help -> displayFragment(HelpFragment())
+            R.id.nav_my_servers -> displayFragment(MyServersFragment())
 
             else -> return false
         }

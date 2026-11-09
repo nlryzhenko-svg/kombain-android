@@ -393,6 +393,10 @@ class ConfigurationFragment @JvmOverloads constructor(
                 startFilesForResult(importFile, "*/*")
             }
 
+            R.id.action_kombain_server -> {
+                (activity as? MainActivity)?.displayFragment(MyServersFragment())
+            }
+
             R.id.action_new_socks -> {
                 startActivity(Intent(requireActivity(), SocksSettingsActivity::class.java))
             }
