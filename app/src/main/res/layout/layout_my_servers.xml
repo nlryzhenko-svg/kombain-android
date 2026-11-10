@@ -66,6 +66,19 @@
                         android:textColor="@color/kombain_card"
                         android:textSize="15sp"
                         app:cornerRadius="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_connect"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/srv_connect"
+                        android:textColor="@color/kombain_on_card"
+                        android:textSize="14sp"
+                        app:cornerRadius="16dp"
+                        app:strokeColor="@color/kombain_on_card"
+                        app:strokeWidth="1dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -27,6 +27,8 @@ object Deployer {
     var listener: (() -> Unit)? = null
     /** called on the main thread after add-user, to show the new user's QR codes */
     var userAdded: ((ServerNode, String, JSONObject) -> Unit)? = null
+    /** called on the main thread when the server's Telegram proxy link is ready */
+    var telegramReady: ((ServerNode, String) -> Unit)? = null
 
     private fun emit(line: String) {
         synchronized(log) { log.append(line).append('\n') }
@@ -57,8 +59,24 @@ object Deployer {
     private fun installArgs(n: ServerNode, extra: List<String> = emptyList()) = listOf(
         "install", "--host", n.host.trim(), "--protocols", n.protocols, "--sni", n.sni.trim(),
         "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
-        "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--name", n.name.trim(),
+        "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--tg-port", n.tgPort.toString(),
+        "--name", n.name.trim(),
     ) + extra
+
+    /** Keeps the stored node in step with what the server reports (protocols, ports). */
+    private fun syncInfo(node: ServerNode, json: JSONObject) {
+        val i = json.optJSONObject("info") ?: return
+        i.optString("protocols").takeIf { it.isNotBlank() }?.let { node.protocols = it }
+        i.optString("sni").takeIf { it.isNotBlank() }?.let { node.sni = it }
+        node.vpnPort = i.optInt("port", node.vpnPort); node.xhPort = i.optInt("xhPort", node.xhPort)
+        node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
+        node.tgPort = i.optInt("tgPort", node.tgPort)
+    }
+
+    private fun telegramOf(json: JSONObject?) = json?.optString("telegram").orEmpty()
+
+    private fun tgNote(json: JSONObject?) =
+        if (telegramOf(json).isNotEmpty()) " Ссылка на прокси для Telegram — в «Пользователи»." else ""
 
     // ---------------------------------------------------------------- public actions
 
@@ -69,9 +87,10 @@ object Deployer {
             val r = SshRunner(node, ::emit).run(installArgs(node))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "установка не удалась")
             node.installedAt = System.currentTimeMillis()
+            syncInfo(node, r.json)
             val n = importLinks(node, node.name, r.json, replace = true)
             ServerStore.upsert(node)
-            finish(true, "Готово: добавлено профилей — $n. Они в группе «${node.name}».")
+            finish(true, "Готово: добавлено профилей — $n. Они в группе «${node.name}».${tgNote(r.json)}")
         }
     }
 
@@ -92,10 +111,11 @@ object Deployer {
             val r2 = SshRunner(entry, ::emit).run(installArgs(entry, listOf("--role", "entry", "--exit-link", bridge)))
             if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не установился")
             entry.installedAt = System.currentTimeMillis()
+            syncInfo(entry, r2.json)
             val group = "${entry.name} → ${exit.name}"
             val n = importLinks(entry, group, r2.json, replace = true)
             ServerStore.upsert(entry)
-            finish(true, "Готово: добавлено профилей — $n. Они в группе «$group».")
+            finish(true, "Готово: добавлено профилей — $n. Они в группе «$group».${tgNote(r2.json)}")
         }
     }
 
@@ -119,6 +139,7 @@ object Deployer {
         runOnDefaultDispatcher {
             val r = SshRunner(node, ::emit).run(listOf("links"))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось получить ссылки")
+            syncInfo(node, r.json)
             val n = importLinks(node, groupName(node), r.json, replace = true, onlyFirstUser = true)
             ServerStore.upsert(node)
             finish(true, "Профили обновлены: $n.")
@@ -150,8 +171,10 @@ object Deployer {
             ports["xhttp"]?.let { args += listOf("--xh-port", it.toString()); node.xhPort = it }
             ports["hy2"]?.let { args += listOf("--hy-port", it.toString()); node.hyPort = it }
             ports["tuic"]?.let { args += listOf("--tuic-port", it.toString()); node.tuicPort = it }
+            ports["tg"]?.let { args += listOf("--tg-port", it.toString()); node.tgPort = it }
             val r = SshRunner(node, ::emit).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить ключи")
+            syncInfo(node, r.json)
             ServerStore.upsert(node)
             when (node.role) {
                 "exit" -> {
@@ -169,7 +192,8 @@ object Deployer {
                 else -> {
                     val n = importLinks(node, groupName(node), r.json, replace = true)
                     ServerStore.upsert(node)
-                    finish(true, "Ключи заменены, профили обновлены: $n. Другим пользователям отправьте новые ссылки.")
+                    finish(true, "Ключи заменены, профили обновлены: $n. Другим пользователям отправьте новые ссылки." +
+                            if (telegramOf(r.json).isNotEmpty()) " Ссылка Telegram-прокси тоже новая." else "")
                 }
             }
         }
@@ -180,10 +204,79 @@ object Deployer {
         if (!start("Пользователи ${node.name}")) return
         runOnDefaultDispatcher {
             val r = SshRunner(node, ::emit).run(listOf("links"))
+            r.json?.let { syncInfo(node, it) }
             ServerStore.upsert(node)
             if (!r.ok || r.json == null) finish(false, r.error ?: "не удалось получить ссылки")
             else finish(true, "Список пользователей получен")
             onMainDispatcher { done(r.json, r.error) }
+        }
+    }
+
+    /**
+     * Adds a server where Kombain is already installed (e.g. from another device):
+     * reads its links and settings, nothing on the server changes.
+     */
+    fun connectExisting(node: ServerNode) {
+        if (!start("Подключаю ${node.host}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("links"))
+            val json = r.json
+            if (!r.ok || json == null) {
+                return@runOnDefaultDispatcher finish(false, r.error ?: "на сервере не найден Kombain")
+            }
+            // the same server added twice: update the existing card
+            ServerStore.all().firstOrNull { it.host.trim() == node.host.trim() && it.id != node.id }?.let { old ->
+                node.id = old.id; node.groupId = old.groupId; node.exitId = old.exitId
+            }
+            syncInfo(node, json)
+            val info = json.optJSONObject("info")
+            if (node.name.isBlank()) node.name = info?.optString("name").orEmpty().ifBlank { node.host }
+            node.role = when {
+                json.optString("role") == "entry" -> "entry"
+                json.optString("bridge").isNotBlank() -> "exit"
+                else -> "single"
+            }
+            node.installedAt = System.currentTimeMillis()
+            var n = 0
+            if (node.role != "exit") n = importLinks(node, groupName(node), json, replace = true)
+            ServerStore.upsert(node)
+            emit("• Проверяю состояние")
+            val st = SshRunner(node, ::emit).run(listOf("stats")).stats
+            if (st != null) {
+                saveStats(node, st)
+                ServerHealth.describe(st).forEach { emit("• $it") }
+            }
+            finish(true, when (node.role) {
+                "exit" -> "Выходной сервер каскада добавлен. Профили берутся с входного сервера."
+                else -> "Сервер добавлен, профилей — $n, группа «${groupName(node)}».${tgNote(json)}"
+            })
+        }
+    }
+
+    fun enableTelegram(node: ServerNode, port: Int) {
+        if (!start("Прокси для Telegram на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("enable-telegram", "--tg-port", port.toString()))
+            val link = telegramOf(r.json)
+            if (!r.ok || r.json == null || link.isEmpty()) {
+                return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось включить прокси")
+            }
+            syncInfo(node, r.json)
+            ServerStore.upsert(node)
+            finish(true, "Прокси для Telegram работает.")
+            emit(link)
+            onMainDispatcher { telegramReady?.invoke(node, link) }
+        }
+    }
+
+    fun disableTelegram(node: ServerNode) {
+        if (!start("Выключаю прокси для Telegram на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("disable-telegram"))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
+            syncInfo(node, r.json)
+            ServerStore.upsert(node)
+            finish(true, "Прокси для Telegram выключен.")
         }
     }
 
@@ -237,9 +330,15 @@ object Deployer {
         if (groupId == 0L || SagerDatabase.groupDao.getById(groupId) == null) {
             groupId = GroupManager.createGroup(ProxyGroup(name = groupName)).id
             node.groupId = groupId
-        } else if (replace) {
-            SagerDatabase.proxyDao.deleteByGroup(groupId)
-            GroupManager.postReload(groupId)
+        } else {
+            SagerDatabase.groupDao.getById(groupId)?.takeIf { it.name != groupName }?.let {
+                it.name = groupName
+                GroupManager.updateGroup(it)
+            }
+            if (replace) {
+                SagerDatabase.proxyDao.deleteByGroup(groupId)
+                GroupManager.postReload(groupId)
+            }
         }
         var count = 0
         var firstProfile = 0L

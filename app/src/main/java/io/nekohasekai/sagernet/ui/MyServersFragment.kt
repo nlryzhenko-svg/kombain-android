@@ -33,6 +33,10 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             if (Deployer.running) snackbar(R.string.srv_busy).show()
             else (activity as? MainActivity)?.displayFragment(ServerWizardFragment())
         }
+        view.findViewById<View>(R.id.btn_connect).setOnClickListener {
+            if (Deployer.running) snackbar(R.string.srv_busy).show()
+            else (activity as? MainActivity)?.displayFragment(ServerConnectFragment())
+        }
         view.findViewById<View>(R.id.log_copy).setOnClickListener {
             if (SagerNet.trySetPrimaryClip(synchronized(Deployer.log) { Deployer.log.toString() })) {
                 snackbar(R.string.srv_log_copied).show()
@@ -49,6 +53,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             if (!Deployer.running) renderServers()
         }
         Deployer.userAdded = { node, user, json -> if (isAdded) UsersSheet.showUser(this, node, user, json) }
+        Deployer.telegramReady = { node, link -> if (isAdded) UsersSheet.showTelegram(this, node, link) }
         renderLog()
         renderServers()
     }
@@ -56,6 +61,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     override fun onPause() {
         Deployer.listener = null
         Deployer.userAdded = null
+        Deployer.telegramReady = null
         super.onPause()
     }
 
@@ -199,7 +205,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     }
 
     private fun protoName(p: String) = when (p) {
-        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; else -> p
+        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; else -> p
     }
 
     fun askUser(s: ServerNode) {
@@ -226,14 +232,30 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     }
 
     private fun moreMenu(s: ServerNode) {
-        val items = arrayOf(
-            getString(R.string.srv_m_rotate), getString(R.string.srv_m_ports),
-            getString(R.string.srv_m_uninstall), getString(R.string.srv_m_forget),
+        val tgItem = when {
+            s.role == "exit" -> null
+            s.hasTelegram -> getString(R.string.srv_m_tg_off)
+            else -> getString(R.string.srv_m_tg_on)
+        }
+        // ids keep the actions stable when the Telegram item is absent
+        val entries = listOfNotNull(
+            tgItem?.let { 4 to it },
+            0 to getString(R.string.srv_m_rotate), 1 to getString(R.string.srv_m_ports),
+            2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
         )
+        val items = entries.map { it.second }.toTypedArray()
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(s.name)
-            .setItems(items) { _, which ->
-                when (which) {
+            .setItems(items) { _, pos ->
+                when (entries[pos].first) {
+                    4 -> if (s.hasTelegram) MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.srv_m_tg_off)
+                        .setMessage(getString(R.string.srv_tg_off_msg, s.name))
+                        .setPositiveButton(R.string.srv_tg_off_yes) { _, _ -> Deployer.disableTelegram(s); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    else askTelegram(s)
+
                     0 -> MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_rotate)
                         .setMessage(R.string.srv_rotate_msg)
@@ -258,10 +280,38 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .show()
     }
 
+    private fun askTelegram(s: ServerNode) {
+        val ctx = requireContext()
+        val til = com.google.android.material.textfield.TextInputLayout(ctx).apply { hint = getString(R.string.srv_tg_port) }
+        val et = com.google.android.material.textfield.TextInputEditText(til.context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(s.tgPort.toString())
+        }
+        til.addView(et)
+        val box = LinearLayout(ctx).apply {
+            setPadding(dp2px(22), dp2px(4), dp2px(22), 0)
+            addView(til, LinearLayout.LayoutParams(-1, -2))
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.srv_m_tg_on)
+            .setMessage(getString(R.string.srv_tg_on_msg, s.sni.ifBlank { "www.microsoft.com" }))
+            .setView(box)
+            .setPositiveButton(R.string.srv_tg_on_yes) { _, _ ->
+                val port = et.text.toString().toIntOrNull()?.takeIf { it in 1..65535 } ?: 9443
+                if (port == s.vpnPort || ("xhttp" in s.protocols.split(',') && port == s.xhPort)) {
+                    snackbar(R.string.srv_err_ports).show()
+                } else {
+                    Deployer.enableTelegram(s, port); scrollTop()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun askPorts(s: ServerNode) {
         val ctx = requireContext()
         val protos = s.protocols.split(',').toMutableList().apply { if ("vless" !in this) add(0, "vless") }
-        val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort)
+        val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort, "tg" to s.tgPort)
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp2px(22), dp2px(4), dp2px(22), 0)

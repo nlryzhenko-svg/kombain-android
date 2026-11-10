@@ -33,6 +33,7 @@ data class ServerNode(
     var hyPort: Int = 443,
     var xhPort: Int = 8443,
     var tuicPort: Int = 8443,
+    var tgPort: Int = 9443,
     var hostKey: String = "",
     var groupId: Long = 0L,
     var installedAt: Long = 0L,
@@ -46,7 +47,7 @@ data class ServerNode(
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
         put("password", password); put("privateKey", privateKey); put("role", role); put("exitId", exitId)
         put("protocols", protocols); put("sni", sni); put("vpnPort", vpnPort); put("hyPort", hyPort)
-        put("xhPort", xhPort); put("tuicPort", tuicPort)
+        put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
@@ -60,10 +61,13 @@ data class ServerNode(
             protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"),
             vpnPort = o.optInt("vpnPort", 443), hyPort = o.optInt("hyPort", 443),
             xhPort = o.optInt("xhPort", 8443), tuicPort = o.optInt("tuicPort", 8443),
+            tgPort = o.optInt("tgPort", 9443),
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
             stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
         )
     }
+
+    val hasTelegram get() = "tg" in protocols.split(',')
 }
 
 object ServerStore {

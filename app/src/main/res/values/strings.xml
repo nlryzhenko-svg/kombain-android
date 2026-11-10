@@ -688,7 +688,7 @@
     <string name="srv_title">Мои серверы</string>
     <string name="srv_new">Поднять сервер</string>
     <string name="srv_hero_title">Свой VPN-сервер</string>
-    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. Kombain сам поставит VLESS Reality, XHTTP, Hysteria2 и TUIC, настроит и добавит профили. Свой домен не нужен.</string>
+    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. Kombain сам поставит VLESS Reality, XHTTP, Hysteria2, TUIC и прокси для Telegram, настроит и добавит профили. Свой домен не нужен.</string>
     <string name="srv_list_title">Ваши серверы</string>
     <string name="srv_empty">Пока нет серверов, поднятых через Kombain.</string>
     <string name="srv_busy">Дождитесь окончания текущей операции</string>
@@ -735,7 +735,7 @@
     <string name="srv_p_hy2">Hysteria2 — быстрый на плохих сетях (UDP)</string>
     <string name="srv_vless_port">Порт VLESS (TCP)</string>
     <string name="srv_hy_port">Порт Hysteria2 (UDP)</string>
-    <string name="srv_note">Kombain зайдёт на сервер по SSH, скачает Xray, Hysteria2 и (для TUIC) sing-box с GitHub, создаст ключи, откроет порты и запустит службы. Выбранные порты должны быть свободны (не заняты сайтом или другим VPN). Пароль хранится на телефоне в зашифрованном виде.</string>
+    <string name="srv_note">Kombain зайдёт на сервер по SSH, скачает Xray, Hysteria2, sing-box (для TUIC) и mtg (для Telegram) с GitHub, создаст ключи, откроет порты и запустит службы. Выбранные порты должны быть свободны (не заняты сайтом или другим VPN). Пароль хранится на телефоне в зашифрованном виде.</string>
     <string name="srv_install">Установить</string>
     <string name="srv_err_host">Укажите IP или домен</string>
     <string name="srv_err_auth">Нужен пароль или ключ SSH</string>
@@ -849,4 +849,29 @@
     <string name="kh_kbWatchServers">Для серверов из «Мои серверы» Kombain раз в 6 часов заходит по SSH, проверяет службы, память и диск. Если служба остановилась или сервер не отвечает — придёт уведомление.</string>
     <string name="kb_widget_desc">Включить или выключить VPN одним касанием</string>
     <string name="srv_just_now">только что</string>
+    <string name="srv_p_tg">Прокси для Telegram — Telegram работает и без VPN (MTProto, маскировка под сайт)</string>
+    <string name="srv_tg_port">Порт Telegram (TCP)</string>
+    <string name="srv_err_vpn_proto">Выберите хотя бы один VPN-протокол</string>
+    <string name="srv_tg_title">Прокси для Telegram</string>
+    <string name="srv_tg_sub">Одна ссылка для всех: нажмите «Подключить» — Telegram сам добавит прокси</string>
+    <string name="srv_tg_connect">Подключить</string>
+    <string name="srv_tg_open">Открыть в Telegram</string>
+    <string name="srv_tg_qr">QR-код</string>
+    <string name="srv_tg_copy">Скопировать ссылку</string>
+    <string name="srv_tg_send">Отправить ссылку</string>
+    <string name="srv_tg_copied">Ссылка на прокси скопирована</string>
+    <string name="srv_tg_no_app">Telegram не установлен — ссылка скопирована</string>
+    <string name="srv_tg_qr_hint">Отсканируйте камерой телефона — откроется Telegram</string>
+    <string name="srv_m_tg_on">Включить прокси для Telegram</string>
+    <string name="srv_m_tg_off">Выключить прокси для Telegram</string>
+    <string name="srv_tg_on_msg">На сервер встанет MTProto-прокси (mtg) с маскировкой под %s. Telegram подключается к нему напрямую, без VPN.</string>
+    <string name="srv_tg_off_msg">Прокси для Telegram на «%s» будет остановлен, его ссылка перестанет работать.</string>
+    <string name="srv_tg_on_yes">Включить</string>
+    <string name="srv_tg_off_yes">Выключить</string>
+    <string name="srv_connect">Подключить существующий</string>
+    <string name="srv_connect_title">Существующий сервер</string>
+    <string name="srv_connect_hint">Сервер, где Kombain уже стоит (например, поднятый с другого устройства). Ничего не переустанавливается: Kombain только заберёт ссылки и добавит сервер в список.</string>
+    <string name="srv_connect_go">Подключить</string>
+    <string name="srv_connect_note">Нужны те же IP, логин и пароль SSH, что при установке. Ключи на сервере не меняются, телефон и другие устройства продолжат работать.</string>
+    <string name="srv_default_existing">Сервер</string>
 </resources>

@@ -36,6 +36,8 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
         }
         applyMode(view)
 
+        val tg = view.findViewById<CheckBox>(R.id.p_tg)
+        tg.setOnCheckedChangeListener { _, on -> view.findViewById<View>(R.id.port_tg_box).isVisible = on }
         view.findViewById<View>(R.id.btn_install).setOnClickListener { install(view) }
     }
 
@@ -87,27 +89,34 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
             if (view.findViewById<CheckBox>(R.id.p_tuic).isChecked) add("tuic")
         }
         if (protos.isEmpty()) {
-            snackbar(R.string.srv_err_proto).show(); return
+            snackbar(R.string.srv_err_vpn_proto).show(); return
         }
+        val withTg = view.findViewById<CheckBox>(R.id.p_tg).isChecked
         val vPort = view.findViewById<EditText>(R.id.port_vless).text.toString().toIntOrNull() ?: 443
         val hPort = view.findViewById<EditText>(R.id.port_hy).text.toString().toIntOrNull() ?: 443
         val xPort = view.findViewById<EditText>(R.id.port_xhttp).text.toString().toIntOrNull() ?: 8443
         val tPort = view.findViewById<EditText>(R.id.port_tuic).text.toString().toIntOrNull() ?: 8443
-        if (("xhttp" in protos && xPort == vPort) || ("tuic" in protos && "hy2" in protos && tPort == hPort)) {
+        val gPort = view.findViewById<EditText>(R.id.port_tg).text.toString().toIntOrNull() ?: 9443
+        if (("xhttp" in protos && xPort == vPort) || ("tuic" in protos && "hy2" in protos && tPort == hPort) ||
+            (withTg && (gPort == vPort || ("xhttp" in protos && gPort == xPort)))
+        ) {
             snackbar(R.string.srv_err_ports).show(); return
         }
 
         val mainNode = readNode(main, if (cascade) getString(R.string.srv_default_exit) else getString(R.string.srv_default_single)) ?: return
         mainNode.protocols = protos.joinToString(","); mainNode.vpnPort = vPort; mainNode.hyPort = hPort
-        mainNode.xhPort = xPort; mainNode.tuicPort = tPort
+        mainNode.xhPort = xPort; mainNode.tuicPort = tPort; mainNode.tgPort = gPort
         if (cascade) {
             val entryNode = readNode(entry, getString(R.string.srv_default_entry)) ?: return
             entryNode.protocols = mainNode.protocols; entryNode.vpnPort = vPort; entryNode.hyPort = hPort
-            entryNode.xhPort = xPort; entryNode.tuicPort = tPort
+            entryNode.xhPort = xPort; entryNode.tuicPort = tPort; entryNode.tgPort = gPort
+            // Telegram connects to the entry node (in Russia); it forwards to the exit
+            if (withTg) entryNode.protocols += ",tg"
             // the bridge between nodes always uses VLESS Reality
             if ("vless" !in protos) mainNode.protocols = "vless," + mainNode.protocols
             Deployer.installCascade(mainNode, entryNode)
         } else {
+            if (withTg) mainNode.protocols += ",tg"
             Deployer.installSingle(mainNode)
         }
         (activity as? MainActivity)?.displayFragment(MyServersFragment())

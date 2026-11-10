@@ -97,6 +97,34 @@ object UsersSheet {
             }
             root.addView(row)
         }
+        val tg = json.optString("telegram")
+        if (tg.isNotEmpty()) {
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp2px(4), dp2px(10), 0, dp2px(8))
+            }
+            val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(TextView(ctx).apply {
+                setText(R.string.srv_tg_title)
+                textSize = 16f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
+            })
+            texts.addView(TextView(ctx).apply {
+                setText(R.string.srv_tg_sub)
+                textSize = 12.5f
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
+            })
+            row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(MaterialButton(ctx, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+                setText(R.string.srv_tg_connect); isAllCaps = false; minWidth = 0; minimumWidth = 0
+                setPadding(dp2px(10), 0, dp2px(10), 0)
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_fab))
+                setOnClickListener { sheet.dismiss(); showTelegram(f, node, tg) }
+            })
+            root.addView(row)
+        }
         root.addView(MaterialButton(ctx).apply {
             setText(R.string.srv_users_add)
             isAllCaps = false
@@ -107,6 +135,35 @@ object UsersSheet {
         }, LinearLayout.LayoutParams(-1, dp2px(52)).apply { topMargin = dp2px(10) })
         sheet.setContentView(root)
         sheet.show()
+    }
+
+    /** The server's Telegram proxy: open it in Telegram, QR for another phone, copy or send. */
+    fun showTelegram(f: androidx.fragment.app.Fragment, node: ServerNode, link: String) {
+        val ctx = f.context ?: return
+        val web = link.replaceFirst("tg://proxy", "https://t.me/proxy")
+        val actions = listOf(
+            ActionSheet.Action(R.drawable.ic_kombain_send, ctx.getString(R.string.srv_tg_open)) {
+                try {
+                    f.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)))
+                } catch (e: android.content.ActivityNotFoundException) {
+                    SagerNet.trySetPrimaryClip(web)
+                    f.snackbar(R.string.srv_tg_no_app).show()
+                }
+            },
+            ActionSheet.Action(R.drawable.ic_kombain_qr, ctx.getString(R.string.srv_tg_qr), ctx.getString(R.string.srv_tg_qr_hint)) {
+                QRCodeDialog(web, ctx.getString(R.string.srv_tg_title) + " · " + node.name)
+                    .showAllowingStateLoss(f.parentFragmentManager)
+            },
+            ActionSheet.Action(R.drawable.ic_kombain_copy, ctx.getString(R.string.srv_tg_copy)) {
+                if (SagerNet.trySetPrimaryClip(web)) f.snackbar(R.string.srv_tg_copied).show()
+            },
+            ActionSheet.Action(R.drawable.ic_kombain_share, ctx.getString(R.string.srv_tg_send)) {
+                f.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, web)
+                }, null))
+            },
+        )
+        ActionSheet.show(ctx, ctx.getString(R.string.srv_tg_title) + " · " + node.name, actions)
     }
 
     /** QR codes and links of one user. */
