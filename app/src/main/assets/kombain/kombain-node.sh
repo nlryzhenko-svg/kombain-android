@@ -286,7 +286,7 @@ render_tuic() {
   has_proto tuic || { rm -f "$KB_DIR/tuic.json"; return 0; }
   ensure_cert
   local users="" first=1 i=0
-  while IFS='|' read -r _ uuid hypass; do
+  while IFS='|' read -r _ uuid hypass _; do
     [ -n "$uuid" ] || continue
     i=$((i + 1))
     [ $first = 1 ] || users+=","; first=0
@@ -321,7 +321,7 @@ render_hysteria() {
     echo "  type: userpass"
     echo "  userpass:"
     local i=0
-    while IFS='|' read -r _ _ hypass; do
+    while IFS='|' read -r _ _ hypass _; do
       [ -n "$hypass" ] || continue
       i=$((i + 1)); echo "    u$i: $hypass"
     done < "$(users_file)"
@@ -866,7 +866,10 @@ busy_ports() {
   if command -v ss >/dev/null; then
     ss -Htuln 2>/dev/null | awk '{n=split($5,a,":"); print a[n]}'
   else
-    awk 'NR>1 {split($2,a,":"); print strtonum("0x" a[2])}' /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 2>/dev/null
+    local h
+    for h in $(awk 'NR>1 {split($2,a,":"); print a[2]}' /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 2>/dev/null); do
+      echo $((16#$h))
+    done
   fi
 }
 
