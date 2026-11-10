@@ -227,6 +227,15 @@ fun StandardV2RayBean.parseDuckSoft(url: HttpUrl) {
                 path = it
             }
         }
+
+        // Kombain: XHTTP only exists in Xray — always use the Xray engine for it
+        "xhttp", "splithttp" -> {
+            type = "xhttp"
+            url.queryParameter("host")?.let { host = it }
+            url.queryParameter("path")?.let { path = it }
+            xhttpMode = url.queryParameter("mode").orEmpty()
+            xrayEngine = true
+        }
     }
 
     // maybe from matsuri vmess exoprt
@@ -472,6 +481,12 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(isTrojan: Boolean): String {
             if (path.isNotBlank()) {
                 builder.setQueryParameter("serviceName", path)
             }
+        }
+
+        "xhttp" -> {
+            if (host.isNotBlank()) builder.addQueryParameter("host", host)
+            if (path.isNotBlank()) builder.addQueryParameter("path", path)
+            if (xhttpMode.orEmpty().isNotBlank()) builder.addQueryParameter("mode", xhttpMode)
         }
     }
 

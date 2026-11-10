@@ -59,14 +59,32 @@ TUN/маршрутизатором, а такой профиль обслужи�
 
 Сборка бинарника: `bash buildScript/lib/xray.sh` → `app/executableSo/<abi>/libxray.so`.
 
+## Сторож связи и автовыбор (с 2.1.0)
+
+`bg/Watchdog.kt` в процессе VPN раз в 30 с делает URL-тест через туннель. После трёх
+неудач (и если прямой интернет у телефона есть) сбрасывает соединения и переподключается,
+а с «Автовыбором сервера» — переходит на самый быстрый живой сервер группы
+(`kombain/AutoPick.kt`). «Проверить все» (спидометр) — тот же тест для всей группы.
+
+## Обслуживание (с 3.0.0)
+
+`kombain/Maintenance.kt` — WorkManager раз в 6 часов: проверка своих серверов по SSH
+(`kombain-node.sh stats`) с уведомлением о падении служб, обновление подписок раз в сутки,
+geoip/geosite раз в неделю. «Российские приложения мимо VPN» — `kombain/RuApps.kt`.
+Виджет — `kombain/KombainWidget.kt`.
+
 ## Свой сервер из приложения (с 1.4.0)
 
 «Ещё → Мои серверы» → «Поднять сервер». Kombain заходит на VPS по SSH (пароль или ключ;
 root или пользователь с sudo), загружает `app/src/main/assets/kombain/kombain-node.sh` и
-ставит Xray (VLESS + Reality) и Hysteria2 как службы systemd. Режимы: одна нода или каскад
+ставит на выбор VLESS + Reality, VLESS + XHTTP + Reality (Xray), Hysteria2 и TUIC v5 (официальный
+sing-box) как службы systemd; домен не нужен. Режимы: одна нода или каскад
 (вход в РФ → выход за рубежом; на входе `geosite:category-ru`/`geoip:ru` идут напрямую,
 Hysteria2 передаёт трафик в Xray, поэтому маршрутизация общая). Профили импортируются в
 отдельную группу, VLESS — с движком Xray. Доступы к серверам шифруются ключом из Android
 Keystore. На сервере: `/etc/kombain`, `/usr/local/bin/kombain-{xray,hysteria}`,
 службы `kombain-xray` и `kombain-hysteria`. Скрипт можно запускать и вручную:
-`bash kombain-node.sh install --host IP [--role entry --exit-link vless://…]`.
+`bash kombain-node.sh install --host IP [--protocols vless,xhttp,hy2,tuic] [--role entry --exit-link vless://…]`.
+Другие команды: `add-user`, `remove-user`, `links`, `stats` (JSON для мониторинга: службы,
+нагрузка, трафик по пользователям через Xray stats API), `rotate [--port …]` (новые ключи,
+пароли и пути; для каскада приложение затем вызывает `set-exit` на входной ноде), `uninstall`.

@@ -15,6 +15,8 @@ class NodeResult(
     val error: String?,
     /** links[]: {user, proto, link}; bridge: vless:// for a cascade entry */
     val json: JSONObject?,
+    /** server health from `stats` */
+    val stats: JSONObject? = null,
 )
 
 /**
@@ -101,6 +103,7 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
             val stdin = if (!root && node.password.isNotBlank()) (node.password + "\n").toByteArray() else null
 
             var result: JSONObject? = null
+            var stats: JSONObject? = null
             var error: String? = null
             val code = exec(s, cmd, stdin) { line ->
                 when {
@@ -114,6 +117,10 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
                         JSONObject(String(Base64.decode(line.removePrefix("KB_RESULT ").trim(), Base64.DEFAULT)))
                     }.getOrNull()
 
+                    line.startsWith("KB_STATS ") -> stats = runCatching {
+                        JSONObject(String(Base64.decode(line.removePrefix("KB_STATS ").trim(), Base64.DEFAULT)))
+                    }.getOrNull()
+
                     line.isNotBlank() -> log("  $line")
                 }
             }
@@ -122,7 +129,8 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
                 error = if (!root) "Команда завершилась с кодом $code (нужен sudo без ограничений или вход под root)"
                 else "Команда завершилась с кодом $code"
             }
-            return NodeResult(error == null && (result != null || args.firstOrNull() in setOf("status", "uninstall")), error, result)
+            val ok = error == null && (result != null || stats != null || args.firstOrNull() in setOf("status", "uninstall"))
+            return NodeResult(ok, error, result, stats)
         } catch (e: Exception) {
             return NodeResult(false, "Ошибка SSH: ${e.message}", null)
         } finally {

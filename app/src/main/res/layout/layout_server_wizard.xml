@@ -97,11 +97,25 @@
                         android:text="@string/srv_p_vless" />
 
                     <com.google.android.material.checkbox.MaterialCheckBox
+                        android:id="@+id/p_xhttp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/srv_p_xhttp" />
+
+                    <com.google.android.material.checkbox.MaterialCheckBox
                         android:id="@+id/p_hy2"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:checked="true"
                         android:text="@string/srv_p_hy2" />
+
+                    <com.google.android.material.checkbox.MaterialCheckBox
+                        android:id="@+id/p_tuic"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="false"
+                        android:text="@string/srv_p_tuic" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -138,6 +152,44 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="number"
                                 android:text="443" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="@string/srv_xh_port">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/port_xhttp"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:text="8443" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:hint="@string/srv_tuic_port">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/port_tuic"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:text="8443" />
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
                 </LinearLayout>

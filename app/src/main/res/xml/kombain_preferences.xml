@@ -40,6 +40,11 @@
             app:persistent="false"
             app:summary="@string/ks_ads_sum"
             app:title="@string/ks_ads" />
+        <SwitchPreference
+            app:defaultValue="false"
+            app:icon="@drawable/ic_kombain_bank"
+            app:key="kbBankDirect"
+            app:title="@string/ks_bank" />
         <moe.matsuri.nb4a.ui.SimpleMenuPreference
             app:entries="@array/ks_dns_names"
             app:entryValues="@array/ks_dns_values"
@@ -77,6 +82,31 @@
             app:key="networkChangeResetConnections"
             app:summary="@string/ks_netreset_sum"
             app:title="@string/ks_netreset" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/ks_cat_upkeep">
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_baseline_refresh_24"
+            app:key="kbAutoSubs"
+            app:summary="@string/ks_autosubs_sum"
+            app:title="@string/ks_autosubs" />
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_globe"
+            app:key="kbAutoGeo"
+            app:summary="@string/ks_autogeo_sum"
+            app:title="@string/ks_autogeo" />
+        <Preference
+            app:icon="@drawable/ic_kombain_download"
+            app:key="ks_geo_now"
+            app:title="@string/ks_geo_now" />
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_server"
+            app:key="kbWatchServers"
+            app:summary="@string/ks_watchsrv_sum"
+            app:title="@string/ks_watchsrv" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_look">

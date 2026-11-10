@@ -1874,7 +1874,7 @@ class ConfigurationFragment @JvmOverloads constructor(
 val kbTestingIds: MutableSet<Long> = java.util.Collections.synchronizedSet(mutableSetOf())
 
 fun kombainBadge(p: ProxyEntity): String = when (p.type) {
-    ProxyEntity.TYPE_VMESS -> if (p.vmessBean?.isVLESS == true) "VL" else "VM"
+    ProxyEntity.TYPE_VMESS -> if (p.vmessBean?.type == "xhttp") "XH" else if (p.vmessBean?.isVLESS == true) "VL" else "VM"
     ProxyEntity.TYPE_TROJAN, ProxyEntity.TYPE_TROJAN_GO -> "TR"
     ProxyEntity.TYPE_SS -> "SS"
     ProxyEntity.TYPE_HYSTERIA -> "HY"

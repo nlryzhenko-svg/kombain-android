@@ -117,7 +117,7 @@ class MainActivity : ThemedActivity(),
         DataStore.configurationStore.registerChangeListener(this)
         GroupManager.userInterface = GroupInterfaceAdapter(this)
 
-        if (intent?.action == Intent.ACTION_VIEW) {
+        if (intent?.action == Intent.ACTION_VIEW || intent?.getStringExtra("kombain_open") != null) {
             onNewIntent(intent)
         }
 
@@ -152,6 +152,12 @@ class MainActivity : ThemedActivity(),
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getStringExtra("kombain_open") == "servers") {
+            intent.removeExtra("kombain_open")
+            displayFragment(MyServersFragment())
+            markMore()
+            return
+        }
 
         val uri = intent.data ?: return
 
@@ -455,7 +461,7 @@ class MainActivity : ThemedActivity(),
             anchorView = binding.bottomNav
             setBackgroundTint(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_card))
             setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_on_card))
-            setActionTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_accent))
+            setActionTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_on_card))
             // TODO
         }
     }

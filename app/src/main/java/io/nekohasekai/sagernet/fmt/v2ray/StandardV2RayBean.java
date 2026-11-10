@@ -68,6 +68,13 @@ public abstract class StandardV2RayBean extends AbstractBean {
 
     // Kombain: run this profile through the bundled Xray-core instead of sing-box
     public Boolean xrayEngine;
+    // Kombain: XHTTP mode (auto / packet-up / stream-up / stream-one)
+    public String xhttpMode;
+
+    /** Kombain: XHTTP exists only in Xray, so such profiles always run on the Xray engine. */
+    public boolean useXray() {
+        return Boolean.TRUE.equals(xrayEngine) || "xhttp".equals(type) || "splithttp".equals(type);
+    }
 
     @Override
     public void initializeDefaultValues() {
@@ -112,11 +119,12 @@ public abstract class StandardV2RayBean extends AbstractBean {
         if (muxType == null) muxType = 0;
         if (muxConcurrency == null) muxConcurrency = 1;
         if (xrayEngine == null) xrayEngine = false;
+        if (xhttpMode == null) xhttpMode = "";
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(5);
+        output.writeInt(6);
         super.serialize(output);
         output.writeString(uuid);
         output.writeString(encryption);
@@ -138,7 +146,9 @@ public abstract class StandardV2RayBean extends AbstractBean {
                 break;
             }
             case "http":
-            case "httpupgrade": {
+            case "httpupgrade":
+            case "xhttp":
+            case "splithttp": {
                 output.writeString(host);
                 output.writeString(path);
                 break;
@@ -170,6 +180,7 @@ public abstract class StandardV2RayBean extends AbstractBean {
         output.writeInt(muxType);
         output.writeInt(muxConcurrency);
         output.writeBoolean(xrayEngine);
+        output.writeString(xhttpMode);
     }
 
     @Override
@@ -199,6 +210,15 @@ public abstract class StandardV2RayBean extends AbstractBean {
             case "httpupgrade": {
                 host = input.readString();
                 path = input.readString();
+                break;
+            }
+            case "xhttp":
+            case "splithttp": {
+                // Kombain: stored only since version 6 (earlier builds dropped the path)
+                if (version >= 6) {
+                    host = input.readString();
+                    path = input.readString();
+                }
                 break;
             }
             case "grpc": {
@@ -263,6 +283,9 @@ public abstract class StandardV2RayBean extends AbstractBean {
         }
         if (version >= 5) {
             xrayEngine = input.readBoolean();
+        }
+        if (version >= 6) {
+            xhttpMode = input.readString();
         }
     }
 

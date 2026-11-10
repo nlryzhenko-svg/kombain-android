@@ -75,7 +75,7 @@ abstract class BoxInstance(
                         pluginConfigs[port] = profile.type to bean.buildNaiveConfig(port)
                     }
 
-                    is StandardV2RayBean -> if (bean.xrayEngine) {
+                    is StandardV2RayBean -> if (bean.useXray()) {
                         if (!Xray.isAvailable()) error("Движок Xray не входит в эту сборку для вашего процессора")
                         pluginConfigs[port] = profile.type to bean.buildXrayConfig(port)
                     }
@@ -148,7 +148,7 @@ abstract class BoxInstance(
                         processes.start(commands, envMap)
                     }
 
-                    bean is StandardV2RayBean && bean.xrayEngine -> {
+                    bean is StandardV2RayBean && bean.useXray() -> {
                         val configFile = File(
                             cacheDir, "xray_" + SystemClock.elapsedRealtime() + ".json"
                         )

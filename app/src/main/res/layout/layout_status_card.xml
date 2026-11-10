@@ -19,6 +19,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="18dp">
@@ -30,8 +32,16 @@
             android:layout_height="76dp"
             android:background="@drawable/kombain_knob_ring"
             android:clickable="true"
+            android:clipChildren="false"
             android:contentDescription="@string/kb_toggle"
             android:focusable="true">
+
+            <View
+                android:id="@+id/status_pulse"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:alpha="0"
+                android:background="@drawable/kombain_knob_pulse" />
 
             <ImageView
                 android:id="@+id/status_knob_icon"
@@ -105,6 +115,13 @@
                 android:textColor="@color/kombain_on_card"
                 android:textSize="13sp"
                 tools:text="↓ 4.2 МБ/с  ↑ 310 КБ/с" />
+
+            <io.nekohasekai.sagernet.widget.SpeedGraphView
+                android:id="@+id/status_graph"
+                android:layout_width="match_parent"
+                android:layout_height="26dp"
+                android:layout_marginTop="6dp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <com.google.android.material.switchmaterial.SwitchMaterial

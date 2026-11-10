@@ -35,6 +35,9 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     private val knob: View = root.findViewById(R.id.status_knob)
     private val knobIcon: ImageView = root.findViewById(R.id.status_knob_icon)
     private val progress: CircularProgressIndicator = root.findViewById(R.id.status_progress)
+    private val pulse: View = root.findViewById(R.id.status_pulse)
+    private val graph: io.nekohasekai.sagernet.widget.SpeedGraphView = root.findViewById(R.id.status_graph)
+    private var pulseAnim: android.animation.Animator? = null
     private val ticker = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
@@ -57,6 +60,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         searching = on
         if (on) {
             progress.isVisible = true
+            setPulsing(true)
             title.setText(R.string.kb_searching)
             detail.typeface = android.graphics.Typeface.DEFAULT
             detail.setText(R.string.kb_test_running)
@@ -94,14 +98,22 @@ class StatusCardController(root: View, private val activity: MainActivity) {
             }
         )
         if (connected) {
-            if (connectedSince == 0L) connectedSince = SystemClock.elapsedRealtime()
-        } else connectedSince = 0L
+            if (connectedSince == 0L) {
+                connectedSince = SystemClock.elapsedRealtime()
+                celebrate()
+            }
+        } else {
+            connectedSince = 0L
+            graph.clear()
+        }
+        graph.isVisible = connected
+        setPulsing(busy)
         ticker.removeCallbacks(tick)
         updateTitle()
         if (connected) ticker.postDelayed(tick, 1000)
         progress.isVisible = busy || testing || searching
         knob.alpha = if (busy) 0.7f else 1f
-        knobIcon.background.mutate().setTint(
+        (knobIcon.background.mutate() as? android.graphics.drawable.GradientDrawable)?.setColor(
             if (connected) 0xFF2FE3A6.toInt() else 0x33FFFFFF
         )
         knobIcon.setColorFilter(if (connected) 0xFF06372A.toInt() else 0xFFFFFFFF.toInt())
@@ -139,12 +151,41 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         }
     }
 
-    fun release() = ticker.removeCallbacks(tick)
+    fun release() {
+        ticker.removeCallbacks(tick)
+        pulseAnim?.cancel()
+    }
+
+    /** Expanding ring around the knob while connecting. */
+    private fun setPulsing(on: Boolean) {
+        if (on == (pulseAnim != null)) return
+        pulseAnim?.cancel(); pulseAnim = null
+        pulse.alpha = 0f
+        if (!on) return
+        val sx = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 0.8f, 1.25f)
+        val sy = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.8f, 1.25f)
+        val a = android.animation.PropertyValuesHolder.ofFloat(View.ALPHA, 0.9f, 0f)
+        pulseAnim = android.animation.ObjectAnimator.ofPropertyValuesHolder(pulse, sx, sy, a).apply {
+            duration = 1200
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.DecelerateInterpolator()
+            start()
+        }
+    }
+
+    /** Small bounce of the knob when the tunnel comes up. */
+    private fun celebrate() {
+        knob.animate().cancel()
+        knob.scaleX = 0.85f; knob.scaleY = 0.85f
+        knob.animate().scaleX(1f).scaleY(1f).setDuration(450)
+            .setInterpolator(android.view.animation.OvershootInterpolator(3f)).start()
+    }
 
     fun onSpeed(tx: Long, rx: Long) {
         if (state != BaseService.State.Connected) return
         val ctx = card.context
         detail.typeface = android.graphics.Typeface.MONOSPACE
+        graph.add(rx, tx)
         val speed = "↓ ${Formatter.formatFileSize(ctx, rx)}/с   ↑ ${Formatter.formatFileSize(ctx, tx)}/с"
         detail.text = testResult?.let { "$it   $speed" } ?: speed
     }

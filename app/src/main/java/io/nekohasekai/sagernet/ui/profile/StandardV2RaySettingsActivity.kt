@@ -178,6 +178,13 @@ abstract class StandardV2RaySettingsActivity : ProfileSettingsActivity<StandardV
                 path.preference.isVisible = true
             }
 
+            "xhttp" -> {
+                host.preference.setTitle(R.string.http_host)
+                path.preference.setTitle(R.string.http_path)
+                host.preference.isVisible = true
+                path.preference.isVisible = true
+            }
+
             "httpupgrade" -> {
                 host.preference.setTitle(R.string.http_upgrade_host)
                 path.preference.setTitle(R.string.http_upgrade_path)

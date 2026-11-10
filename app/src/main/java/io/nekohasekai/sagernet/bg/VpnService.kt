@@ -135,6 +135,13 @@ class VpnService : BaseVpnService(),
             it[0].hysteriaBean?.protocol == HysteriaBean.PROTOCOL_FAKETCP
         }
 
+        // Kombain: Russian banks / Gosuslugi / marketplaces go around the tunnel
+        val ruApps = if (DataStore.kbBankDirect) io.nekohasekai.sagernet.kombain.RuApps.installed(packageManager) else emptyList()
+        if (!proxyApps && !needBypassRootUid && ruApps.isNotEmpty()) {
+            ruApps.forEach { runCatching { builder.addDisallowedApplication(it) } }
+            Logs.d("Kombain: RU apps bypass ${ruApps.joinToString(", ")}")
+        }
+
         if (proxyApps || needBypassRootUid) {
             val individual = mutableSetOf<String>()
             val allApps by lazy {
@@ -160,6 +167,10 @@ class VpnService : BaseVpnService(),
             } else {
                 individual.addAll(allApps)
                 bypass = false
+            }
+
+            if (ruApps.isNotEmpty()) {
+                if (bypass) individual.addAll(ruApps) else individual.removeAll(ruApps.toSet())
             }
 
             val added = mutableListOf<String>()

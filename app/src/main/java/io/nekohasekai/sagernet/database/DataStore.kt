@@ -108,7 +108,7 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var bypassLanInCore by configurationStore.boolean(Key.BYPASS_LAN_IN_CORE)
 
     var allowAccess by configurationStore.boolean(Key.ALLOW_ACCESS)
-    var speedInterval by configurationStore.stringToInt(Key.SPEED_INTERVAL)
+    var speedInterval by configurationStore.stringToInt(Key.SPEED_INTERVAL) { 1000 }
     var showGroupInNotification by configurationStore.boolean("showGroupInNotification")
 
     var globalCustomConfig by configurationStore.string(Key.GLOBAL_CUSTOM_CONFIG) { "" }
@@ -161,6 +161,11 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     // Kombain: connection watchdog / automatic server choice
     var kbWatchdog by configurationStore.boolean("kbWatchdog") { true }
     var kbAutoServer by configurationStore.boolean("kbAutoServer") { false }
+    var kbWatchServers by configurationStore.boolean("kbWatchServers") { true }
+    var kbAutoSubs by configurationStore.boolean("kbAutoSubs") { true }
+    var kbAutoGeo by configurationStore.boolean("kbAutoGeo") { true }
+    var kbGeoUpdated by configurationStore.long("kbGeoUpdated") { 0L }
+    var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 
     var tunImplementation by configurationStore.stringToInt(Key.TUN_IMPLEMENTATION) { TunImplementation.GVISOR }

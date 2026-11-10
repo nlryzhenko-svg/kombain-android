@@ -25,6 +25,8 @@ object Deployer {
     var lastMessage: String = ""
         private set
     var listener: (() -> Unit)? = null
+    /** called on the main thread after add-user, to show the new user's QR codes */
+    var userAdded: ((ServerNode, String, JSONObject) -> Unit)? = null
 
     private fun emit(line: String) {
         synchronized(log) { log.append(line).append('\n') }
@@ -49,11 +51,13 @@ object Deployer {
         lastOk = ok
         lastMessage = message
         emit(if (ok) "✔ $message" else "✖ $message")
+        if (ok) runCatching { Maintenance.schedule() }
     }
 
     private fun installArgs(n: ServerNode, extra: List<String> = emptyList()) = listOf(
         "install", "--host", n.host.trim(), "--protocols", n.protocols, "--sni", n.sni.trim(),
-        "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(), "--name", n.name.trim(),
+        "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
+        "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--name", n.name.trim(),
     ) + extra
 
     // ---------------------------------------------------------------- public actions
@@ -104,8 +108,9 @@ object Deployer {
             val links = r.json.optJSONArray("links")
             val mine = (0 until (links?.length() ?: 0)).map { links!!.getJSONObject(it) }
                 .filter { it.optString("user") == userName }
-            finish(true, "Пользователь добавлен. Ссылки ниже — отправьте их на его устройство.")
+            finish(true, "Пользователь добавлен. Ссылки и QR-коды — в «Пользователи».")
             mine.forEach { emit(it.optString("link")) }
+            onMainDispatcher { userAdded?.invoke(node, userName, r.json) }
         }
     }
 
@@ -123,9 +128,80 @@ object Deployer {
     fun status(node: ServerNode) {
         if (!start("Состояние ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("status"))
-            if (r.error != null) finish(false, r.error) else finish(true, "Проверка завершена")
+            val r = SshRunner(node, ::emit).run(listOf("stats"))
+            val st = r.stats
+            if (st == null) {
+                node.health = r.error ?: "нет ответа"
+                ServerStore.upsert(node)
+                return@runOnDefaultDispatcher finish(false, r.error ?: "сервер не ответил")
+            }
+            saveStats(node, st)
+            ServerHealth.describe(st).forEach { emit("• $it") }
+            finish(true, if (node.health.isEmpty()) "Всё работает" else node.health)
         }
+    }
+
+    /** New Reality keys, paths, passwords (and optionally ports). Cascade nodes are re-linked. */
+    fun rotate(node: ServerNode, ports: Map<String, Int> = emptyMap()) {
+        if (!start("Новые ключи для ${node.name}")) return
+        runOnDefaultDispatcher {
+            val args = mutableListOf("rotate")
+            ports["vless"]?.let { args += listOf("--port", it.toString()); node.vpnPort = it }
+            ports["xhttp"]?.let { args += listOf("--xh-port", it.toString()); node.xhPort = it }
+            ports["hy2"]?.let { args += listOf("--hy-port", it.toString()); node.hyPort = it }
+            ports["tuic"]?.let { args += listOf("--tuic-port", it.toString()); node.tuicPort = it }
+            val r = SshRunner(node, ::emit).run(args)
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить ключи")
+            ServerStore.upsert(node)
+            when (node.role) {
+                "exit" -> {
+                    // the entry node must learn the exit's new credentials
+                    val bridge = r.json.optString("bridge")
+                    val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
+                    if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Ключи заменены.")
+                    emit("── Переключаю входной сервер ${entry.name} на новые ключи")
+                    val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                    if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
+                    ServerStore.upsert(entry)
+                    finish(true, "Ключи выходного сервера заменены, каскад продолжает работать.")
+                }
+
+                else -> {
+                    val n = importLinks(node, groupName(node), r.json, replace = true)
+                    ServerStore.upsert(node)
+                    finish(true, "Ключи заменены, профили обновлены: $n. Другим пользователям отправьте новые ссылки.")
+                }
+            }
+        }
+    }
+
+    /** All users and their links (no import) — for the sharing sheet. */
+    fun fetchLinks(node: ServerNode, done: (JSONObject?, String?) -> Unit) {
+        if (!start("Пользователи ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("links"))
+            ServerStore.upsert(node)
+            if (!r.ok || r.json == null) finish(false, r.error ?: "не удалось получить ссылки")
+            else finish(true, "Список пользователей получен")
+            onMainDispatcher { done(r.json, r.error) }
+        }
+    }
+
+    fun removeUser(node: ServerNode, userName: String) {
+        if (!start("Удаляю пользователя «$userName» с ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("remove-user", userName))
+            if (!r.ok) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось удалить")
+            ServerStore.upsert(node)
+            finish(true, "Пользователь «$userName» удалён — его ссылки больше не работают.")
+        }
+    }
+
+    fun saveStats(node: ServerNode, st: JSONObject) {
+        node.stats = st.toString()
+        node.statsAt = System.currentTimeMillis()
+        node.health = ServerHealth.problem(st)
+        ServerStore.upsert(node)
     }
 
     fun uninstall(node: ServerNode) {

@@ -87,6 +87,7 @@ class SagerNet : Application(),
                 }
 
                 updateNotificationChannels()
+                runCatching { io.nekohasekai.sagernet.kombain.Maintenance.schedule() }.onFailure { Logs.w(it) }
             }
         }
 

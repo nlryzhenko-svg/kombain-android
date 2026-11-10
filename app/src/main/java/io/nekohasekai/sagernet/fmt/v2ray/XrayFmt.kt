@@ -97,6 +97,7 @@ private fun StandardV2RayBean.xrayStreamSettings(): JSONObject {
         "xhttp" -> stream.put("xhttpSettings", JSONObject().apply {
             if (path.isNotBlank()) put("path", path)
             if (host.isNotBlank()) put("host", host)
+            put("mode", xhttpMode.orEmpty().ifBlank { "auto" })
         })
     }
 

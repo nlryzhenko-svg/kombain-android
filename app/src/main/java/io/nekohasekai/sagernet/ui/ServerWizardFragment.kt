@@ -82,19 +82,28 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
         }
         val protos = buildList {
             if (view.findViewById<CheckBox>(R.id.p_vless).isChecked) add("vless")
+            if (view.findViewById<CheckBox>(R.id.p_xhttp).isChecked) add("xhttp")
             if (view.findViewById<CheckBox>(R.id.p_hy2).isChecked) add("hy2")
+            if (view.findViewById<CheckBox>(R.id.p_tuic).isChecked) add("tuic")
         }
         if (protos.isEmpty()) {
             snackbar(R.string.srv_err_proto).show(); return
         }
         val vPort = view.findViewById<EditText>(R.id.port_vless).text.toString().toIntOrNull() ?: 443
         val hPort = view.findViewById<EditText>(R.id.port_hy).text.toString().toIntOrNull() ?: 443
+        val xPort = view.findViewById<EditText>(R.id.port_xhttp).text.toString().toIntOrNull() ?: 8443
+        val tPort = view.findViewById<EditText>(R.id.port_tuic).text.toString().toIntOrNull() ?: 8443
+        if (("xhttp" in protos && xPort == vPort) || ("tuic" in protos && "hy2" in protos && tPort == hPort)) {
+            snackbar(R.string.srv_err_ports).show(); return
+        }
 
         val mainNode = readNode(main, if (cascade) getString(R.string.srv_default_exit) else getString(R.string.srv_default_single)) ?: return
         mainNode.protocols = protos.joinToString(","); mainNode.vpnPort = vPort; mainNode.hyPort = hPort
+        mainNode.xhPort = xPort; mainNode.tuicPort = tPort
         if (cascade) {
             val entryNode = readNode(entry, getString(R.string.srv_default_entry)) ?: return
             entryNode.protocols = mainNode.protocols; entryNode.vpnPort = vPort; entryNode.hyPort = hPort
+            entryNode.xhPort = xPort; entryNode.tuicPort = tPort
             // the bridge between nodes always uses VLESS Reality
             if ("vless" !in protos) mainNode.protocols = "vless," + mainNode.protocols
             Deployer.installCascade(mainNode, entryNode)

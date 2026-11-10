@@ -48,12 +48,14 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             renderLog()
             if (!Deployer.running) renderServers()
         }
+        Deployer.userAdded = { node, user, json -> if (isAdded) UsersSheet.showUser(this, node, user, json) }
         renderLog()
         renderServers()
     }
 
     override fun onPause() {
         Deployer.listener = null
+        Deployer.userAdded = null
         super.onPause()
     }
 
@@ -114,12 +116,47 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                 setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
             })
             inner.addView(TextView(ctx).apply {
-                val protos = s.protocols.split(',').joinToString(" + ") {
-                    when (it) { "vless" -> "VLESS Reality"; "hy2" -> "Hysteria2"; else -> it }
-                }
+                val protos = s.protocols.split(',').joinToString(" + ") { protoName(it) }
                 text = "${s.host} · $protos"
                 textSize = 13f
                 setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
+            })
+            // health line (from the last check)
+            val st = s.stats.takeIf { it.isNotBlank() }?.let { runCatching { org.json.JSONObject(it) }.getOrNull() }
+            inner.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp2px(8), 0, 0)
+                val color = when {
+                    st == null && s.health.isEmpty() -> 0xFF9AA9AC.toInt()
+                    s.health.isEmpty() -> 0xFF2FE3A6.toInt()
+                    else -> ContextCompat.getColor(ctx, R.color.kombain_danger)
+                }
+                addView(View(ctx).apply {
+                    setBackgroundResource(R.drawable.kombain_dot)
+                    backgroundTintList = android.content.res.ColorStateList.valueOf(color)
+                }, LinearLayout.LayoutParams(dp2px(8), dp2px(8)))
+                addView(TextView(ctx).apply {
+                    text = when {
+                        st == null && s.health.isEmpty() -> getString(R.string.srv_never_checked)
+                        else -> (s.health.ifEmpty { getString(R.string.srv_ok) }) + " · " +
+                                getString(R.string.srv_checked_ago,
+                                    if (System.currentTimeMillis() - s.statsAt < 60_000) getString(R.string.srv_just_now)
+                                    else android.text.format.DateUtils.getRelativeTimeSpanString(
+                                        s.statsAt, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS))
+                    }
+                    textSize = 13f
+                    setTextColor(if (s.health.isEmpty()) ContextCompat.getColor(ctx, R.color.kombain_text) else color)
+                    setPadding(dp2px(8), 0, 0, 0)
+                })
+            })
+            if (st != null) inner.addView(TextView(ctx).apply {
+                text = io.nekohasekai.sagernet.kombain.ServerHealth.summary(st) + "\n" +
+                        io.nekohasekai.sagernet.kombain.ServerHealth.traffic(st)
+                textSize = 12.5f
+                setLineSpacing(dp2px(2).toFloat(), 1f)
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
+                setPadding(dp2px(16), dp2px(2), 0, 0)
             })
             val actions = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -139,7 +176,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                 })
             if (s.role != "exit") {
                 action(R.string.srv_a_profiles) { Deployer.refreshLinks(s); scrollTop() }
-                action(R.string.srv_a_user) { askUser(s) }
+                action(R.string.srv_a_user) { UsersSheet.show(this, s) }
             }
             action(R.string.srv_a_status) { Deployer.status(s); scrollTop() }
             action(R.string.srv_a_more) { moreMenu(s) }
@@ -161,7 +198,11 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         root?.findViewById<NestedScrollView>(R.id.scroll)?.smoothScrollTo(0, 0)
     }
 
-    private fun askUser(s: ServerNode) {
+    private fun protoName(p: String) = when (p) {
+        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; else -> p
+    }
+
+    fun askUser(s: ServerNode) {
         val input = EditText(requireContext()).apply {
             hint = getString(R.string.srv_user_hint)
             setSingleLine()
@@ -185,23 +226,68 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     }
 
     private fun moreMenu(s: ServerNode) {
-        val items = arrayOf(getString(R.string.srv_m_uninstall), getString(R.string.srv_m_forget))
+        val items = arrayOf(
+            getString(R.string.srv_m_rotate), getString(R.string.srv_m_ports),
+            getString(R.string.srv_m_uninstall), getString(R.string.srv_m_forget),
+        )
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(s.name)
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.srv_m_rotate)
+                        .setMessage(R.string.srv_rotate_msg)
+                        .setPositiveButton(R.string.srv_rotate_yes) { _, _ -> Deployer.rotate(s); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+
+                    1 -> askPorts(s)
+
+                    2 -> MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_uninstall)
                         .setMessage(getString(R.string.srv_uninstall_confirm, s.name))
                         .setPositiveButton(R.string.srv_m_uninstall_yes) { _, _ -> Deployer.uninstall(s); scrollTop() }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
 
-                    1 -> {
+                    3 -> {
                         ServerStore.remove(s.id); renderServers()
                     }
                 }
             }
+            .show()
+    }
+
+    private fun askPorts(s: ServerNode) {
+        val ctx = requireContext()
+        val protos = s.protocols.split(',').toMutableList().apply { if ("vless" !in this) add(0, "vless") }
+        val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort)
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp2px(22), dp2px(4), dp2px(22), 0)
+        }
+        val fields = protos.associateWith { p ->
+            val til = com.google.android.material.textfield.TextInputLayout(ctx).apply {
+                hint = protoName(p) + if (p == "hy2" || p == "tuic") " (UDP)" else " (TCP)"
+            }
+            val et = com.google.android.material.textfield.TextInputEditText(til.context).apply {
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                setText(current[p].toString())
+            }
+            til.addView(et)
+            box.addView(til, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp2px(6) })
+            et
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.srv_m_ports)
+            .setMessage(R.string.srv_ports_msg)
+            .setView(box)
+            .setPositiveButton(R.string.srv_rotate_yes) { _, _ ->
+                val ports = fields.mapValues { it.value.text.toString().toIntOrNull() ?: 0 }
+                    .filter { it.value in 1..65535 }
+                Deployer.rotate(s, ports); scrollTop()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 }

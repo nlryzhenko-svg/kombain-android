@@ -520,6 +520,7 @@
         <item name="android:statusBarColor">@color/kombain_bg</item>
         <item name="android:navigationBarColor">@color/kombain_tile</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/kombain_light_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">@bool/kombain_light_bars</item>
         <item name="android:textColorPrimary">@color/kombain_text</item>
         <item name="android:textColorSecondary">@color/kombain_text2</item>
         <item name="colorSurface">@color/kombain_tile</item>
@@ -637,6 +638,10 @@
     <style name="TextAppearance.KF.Button" parent="TextAppearance.MaterialComponents.Button">
         <item name="android:fontFamily">@font/kombain_font</item>
         <item name="fontFamily">@font/kombain_font</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="textAllCaps">false</item>
+        <item name="android:textStyle">bold</item>
     </style>
     <style name="TextAppearance.KF.Caption" parent="TextAppearance.MaterialComponents.Caption">
         <item name="android:fontFamily">@font/kombain_font</item>

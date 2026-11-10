@@ -68,6 +68,17 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
 
     private lateinit var apps: Preference
     private lateinit var battery: Preference
+    private lateinit var bank: Preference
+    private lateinit var geoNow: Preference
+
+    private fun updateGeoSummary() {
+        val f = java.io.File(io.nekohasekai.sagernet.kombain.Maintenance.geoDir(), "geosite.version.txt")
+        val t = maxOf(DataStore.kbGeoUpdated, if (f.exists()) f.lastModified() else 0L)
+        geoNow.summary = if (t == 0L) getString(R.string.ks_geo_never) else getString(
+            R.string.ks_geo_last,
+            android.text.format.DateUtils.getRelativeTimeSpanString(t, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS)
+        )
+    }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceManager.preferenceDataStore = DataStore.configurationStore
@@ -113,6 +124,26 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
             )
         }
 
+        bank = findPreference("kbBankDirect")!!
+        bank.onPreferenceChangeListener = reload
+        val upkeep = Preference.OnPreferenceChangeListener { _, _ ->
+            runOnDefaultDispatcher { io.nekohasekai.sagernet.kombain.Maintenance.schedule() }; true
+        }
+        listOf("kbAutoSubs", "kbAutoGeo", "kbWatchServers").forEach { findPreference<Preference>(it)!!.onPreferenceChangeListener = upkeep }
+        geoNow = findPreference("ks_geo_now")!!
+        geoNow.setOnPreferenceClickListener {
+            geoNow.setSummary(R.string.ks_geo_running)
+            runOnDefaultDispatcher {
+                val changed = runCatching { io.nekohasekai.sagernet.kombain.Maintenance.updateGeo(force = true) }.getOrDefault(false)
+                onMainDispatcher {
+                    if (!isAdded) return@onMainDispatcher
+                    updateGeoSummary()
+                    (activity as? MainActivity)?.snackbar(getString(if (changed) R.string.ks_geo_done else R.string.ks_geo_same))?.show()
+                }
+            }
+            true
+        }
+
         battery = findPreference("ks_battery")!!
         battery.setOnPreferenceClickListener { openBatterySettings(); true }
 
@@ -156,6 +187,11 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         val ignoring = Build.VERSION.SDK_INT < 23 ||
                 pm?.isIgnoringBatteryOptimizations(requireContext().packageName) == true
         battery.summary = getString(if (ignoring) R.string.ks_battery_on else R.string.ks_battery_off)
+        updateGeoSummary()
+        runOnDefaultDispatcher {
+            val n = io.nekohasekai.sagernet.kombain.RuApps.installed(requireContext().packageManager).size
+            onMainDispatcher { if (isAdded) bank.summary = getString(R.string.ks_bank_sum, n) }
+        }
     }
 
     /** A switch that adds/removes one of Kombain's ready-made routing rules. */

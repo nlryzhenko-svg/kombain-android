@@ -31,15 +31,24 @@ data class ServerNode(
     var sni: String = "",
     var vpnPort: Int = 443,
     var hyPort: Int = 443,
+    var xhPort: Int = 8443,
+    var tuicPort: Int = 8443,
     var hostKey: String = "",
     var groupId: Long = 0L,
     var installedAt: Long = 0L,
+    /** last `stats` JSON and when it was taken */
+    var stats: String = "",
+    var statsAt: Long = 0L,
+    /** last background health check: "" = fine, otherwise a short problem text */
+    var health: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
         put("password", password); put("privateKey", privateKey); put("role", role); put("exitId", exitId)
         put("protocols", protocols); put("sni", sni); put("vpnPort", vpnPort); put("hyPort", hyPort)
+        put("xhPort", xhPort); put("tuicPort", tuicPort)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
+        put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
 
     companion object {
@@ -50,7 +59,9 @@ data class ServerNode(
             role = o.optString("role", "single"), exitId = o.optString("exitId"),
             protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"),
             vpnPort = o.optInt("vpnPort", 443), hyPort = o.optInt("hyPort", 443),
+            xhPort = o.optInt("xhPort", 8443), tuicPort = o.optInt("tuicPort", 8443),
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
+            stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
         )
     }
 }
