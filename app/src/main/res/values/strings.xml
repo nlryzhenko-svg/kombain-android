@@ -850,6 +850,16 @@
     <string name="kb_widget_desc">Включить или выключить VPN одним касанием</string>
     <string name="srv_just_now">только что</string>
     <string name="ks_route_mode">Что пускать через VPN</string>
+    <string name="srv_m_shuffle">Сменить порты (случайно)</string>
+    <string name="srv_shuffle_msg">VPN-протоколы получат новые случайные порты. Ключи, прокси для Telegram и ссылка-подписка не меняются.\n\nЭтот телефон и устройства с подпиской обновятся сами. Тем, кто подключён через Happ, v2rayNG или Hiddify, нужно будет отправить новые QR-коды.</string>
+    <string name="srv_auto_ports_on">Порты меняются сами раз в %d дн.</string>
+    <string name="srv_m_auto_ports">Автосмена портов…</string>
+    <string-array name="srv_auto_ports_names">
+        <item>Выключена</item>
+        <item>Каждый день</item>
+        <item>Раз в 3 дня</item>
+        <item>Раз в неделю</item>
+    </string-array>
     <string name="srv_sni_pick">Подобрать сайт рядом с сервером</string>
     <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — Kombain зайдёт на него и проверит соседей</string>
     <string name="srv_sni_searching">Проверяю сайты рядом с сервером…\nЭто до минуты, на сервере ничего не меняется.</string>

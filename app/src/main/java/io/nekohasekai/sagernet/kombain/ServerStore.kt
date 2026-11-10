@@ -36,6 +36,8 @@ data class ServerNode(
     var xhPort: Int = 8443,
     var tuicPort: Int = 8443,
     var tgPort: Int = 9443,
+    /** server-side random port change every N days, 0 = off */
+    var autoPorts: Int = 0,
     var hostKey: String = "",
     var groupId: Long = 0L,
     var installedAt: Long = 0L,
@@ -49,7 +51,7 @@ data class ServerNode(
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
         put("password", password); put("privateKey", privateKey); put("role", role); put("exitId", exitId)
         put("protocols", protocols); put("sni", sni); put("dest", dest); put("vpnPort", vpnPort); put("hyPort", hyPort)
-        put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort)
+        put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort); put("autoPorts", autoPorts)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
@@ -63,7 +65,7 @@ data class ServerNode(
             protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"), dest = o.optString("dest"),
             vpnPort = o.optInt("vpnPort", 443), hyPort = o.optInt("hyPort", 443),
             xhPort = o.optInt("xhPort", 8443), tuicPort = o.optInt("tuicPort", 8443),
-            tgPort = o.optInt("tgPort", 9443),
+            tgPort = o.optInt("tgPort", 9443), autoPorts = o.optInt("autoPorts", 0),
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
             stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
         )

@@ -17,6 +17,9 @@
 #   kombain-node.sh find-sni [--host IP]     sites next to the server that suit Reality (KB_SNI <base64 JSON>)
 #   kombain-node.sh set-sni --sni DOMAIN [--dest IP:443]   switch the masking site, keys stay
 #   kombain-node.sh ensure-sub                subscription links for every user (HTTPS, pinned self-signed cert)
+#   kombain-node.sh shuffle-ports             random new ports for the VPN protocols; keys, Telegram proxy and
+#                                             the subscription stay as they are
+#   kombain-node.sh auto-ports --every DAYS   shuffle ports on a schedule (0 = off)
 #   kombain-node.sh uninstall
 #
 # Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody).
@@ -65,13 +68,13 @@ load_state() {
   # shellcheck disable=SC1090
   . "$(state_file)"
   XH_PORT=${XH_PORT:-8443}; TUIC_PORT=${TUIC_PORT:-8443}; XH_PATH=${XH_PATH:-/$(rand_hex 6)}
-  TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}; DEST=${DEST:-}; SUB_PORT=${SUB_PORT:-}
+  TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}; DEST=${DEST:-}; SUB_PORT=${SUB_PORT:-}; AUTO_PORTS=${AUTO_PORTS:-0}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -545,8 +548,8 @@ print_result() {
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s}' \
-    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}")
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s}' \
+    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
@@ -858,10 +861,129 @@ cmd_ensure_sub() {
   print_result
 }
 
+# ports someone listens on right now (tcp and udp)
+busy_ports() {
+  if command -v ss >/dev/null; then
+    ss -Htuln 2>/dev/null | awk '{n=split($5,a,":"); print a[n]}'
+  else
+    awk 'NR>1 {split($2,a,":"); print strtonum("0x" a[2])}' /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 2>/dev/null
+  fi
+}
+
+# a random free port 20000–59999 that no other Kombain service uses
+pick_port() {
+  local used=" $(busy_ports | tr '\n' ' ') $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT $* " p i
+  for i in $(seq 1 200); do
+    p=$((20000 + RANDOM % 40000))
+    case $used in *" $p "*) continue ;; esac
+    echo "$p"; return 0
+  done
+  die "не нашёл свободный порт"
+}
+
+close_ports() { # "port/proto" ... — remove old firewall openings
+  [ "$KB_SYSTEMD" = 1 ] || return 0
+  local x
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+    for x in "$@"; do ufw delete allow "$x" >/dev/null 2>&1 || true; done
+  elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    for x in "$@"; do firewall-cmd -q --permanent --remove-port="$x" >/dev/null 2>&1 || true; done
+    firewall-cmd -q --reload || true
+  fi
+  return 0
+}
+
+cmd_shuffle_ports() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  # the exit node of a cascade is reached by its entry node: only the app can re-link them
+  # the exit node of a cascade is reached by its entry node: only the app can re-link them (--relink)
+  [ -n "${BRIDGE_UUID-}" ] && [ "${1-}" != "--relink" ] && die "это выходной сервер каскада — меняйте его порты из приложения"
+  local old=() new_vless new_xh="" new_hy="" new_tuic=""
+  old+=("$PORT/tcp")
+  new_vless=$(pick_port)
+  if has_proto xhttp; then old+=("$XH_PORT/tcp"); new_xh=$(pick_port "$new_vless"); fi
+  if has_proto hy2; then old+=("$HY_PORT/udp"); new_hy=$(pick_port "$new_vless" "$new_xh"); fi
+  if has_proto tuic; then old+=("$TUIC_PORT/udp"); new_tuic=$(pick_port "$new_vless" "$new_xh" "$new_hy"); fi
+  PORT=$new_vless
+  [ -n "$new_xh" ] && XH_PORT=$new_xh
+  [ -n "$new_hy" ] && HY_PORT=$new_hy
+  [ -n "$new_tuic" ] && TUIC_PORT=$new_tuic
+  save_state
+  step "Новые порты: VLESS $PORT${new_xh:+, XHTTP $XH_PORT}${new_hy:+, Hysteria2 $HY_PORT}${new_tuic:+, TUIC $TUIC_PORT}"
+  # Telegram proxy and the subscription server keep running untouched
+  render_xray; render_hysteria; render_tuic; render_sub
+  if [ "$KB_SYSTEMD" = 1 ]; then
+    open_firewall
+    local s
+    for s in xray hysteria tuic; do
+      svc_list | grep -qx "$s" || continue
+      systemctl restart "kombain-$s"
+    done
+    sleep 2
+    for s in xray hysteria tuic; do
+      svc_list | grep -qx "$s" || continue
+      systemctl is-active --quiet "kombain-$s" || die "$(svc_title "$s") не запустился: $(journalctl -u "kombain-$s" -n 5 --no-pager | tail -3 | tr '\n' ' ')"
+    done
+    close_ports "${old[@]}"
+  fi
+  step "Порты сменены — Telegram и ключи не тронуты"
+  print_result
+}
+
+cmd_auto_ports() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local days=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --every) days=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  [[ $days =~ ^[0-9]+$ ]] || die "--every: число дней"
+  [ -n "${BRIDGE_UUID-}" ] && [ "$days" != 0 ] && die "на выходном сервере каскада автосмена портов недоступна"
+  AUTO_PORTS=$days
+  save_state
+  if [ "$KB_SYSTEMD" = 1 ]; then
+    systemctl disable --now kombain-ports.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
+    if [ "$days" -gt 0 ]; then
+      # the script runs from a temporary file: keep a copy for the timer
+      install -m 700 "$0" "$KB_DIR/kombain-node.sh"
+      cat > /etc/systemd/system/kombain-ports.service <<EOF
+[Unit]
+Description=Kombain: random new VPN ports
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash $KB_DIR/kombain-node.sh shuffle-ports
+EOF
+      cat > /etc/systemd/system/kombain-ports.timer <<EOF
+[Unit]
+Description=Kombain: change VPN ports every $days day(s)
+[Timer]
+OnCalendar=*-*-1/$days 04:00:00
+RandomizedDelaySec=2h
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+      systemctl daemon-reload
+      systemctl enable --now kombain-ports.timer >/dev/null 2>&1
+    else
+      systemctl daemon-reload
+    fi
+  fi
+  if [ "$days" -gt 0 ]; then step "Порты будут меняться раз в $days дн. (около 4–6 утра по времени сервера)"
+  else step "Автосмена портов выключена"; fi
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   if [ "$KB_SYSTEMD" = 1 ]; then
-    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg kombain-sub >/dev/null 2>&1 || true
+    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg kombain-sub kombain-ports.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
     rm -f /etc/systemd/system/kombain-xray.service /etc/systemd/system/kombain-hysteria.service \
       /etc/systemd/system/kombain-tuic.service /etc/systemd/system/kombain-mtg.service \
       /etc/systemd/system/kombain-sub.service /etc/sysctl.d/99-kombain.conf
@@ -870,6 +992,11 @@ cmd_uninstall() {
   rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg"
   step "Kombain удалён с сервера"
 }
+
+# the copy kept for the port timer follows app updates
+if [ -f "$KB_DIR/kombain-node.sh" ] && [ "$(readlink -f "$0")" != "$KB_DIR/kombain-node.sh" ] && [ -w "$KB_DIR" ]; then
+  install -m 700 "$0" "$KB_DIR/kombain-node.sh" 2>/dev/null || true
+fi
 
 case ${1-} in
   install) shift; cmd_install "$@" ;;
@@ -885,6 +1012,8 @@ case ${1-} in
   find-sni) shift; cmd_find_sni "$@" ;;
   set-sni) shift; cmd_set_sni "$@" ;;
   ensure-sub) cmd_ensure_sub ;;
+  shuffle-ports) shift; cmd_shuffle_ports "$@" ;;
+  auto-ports) shift; cmd_auto_ports "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | uninstall" ;;
 esac

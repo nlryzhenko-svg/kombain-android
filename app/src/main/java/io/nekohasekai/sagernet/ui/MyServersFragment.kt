@@ -123,7 +123,8 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             })
             inner.addView(TextView(ctx).apply {
                 val protos = s.protocols.split(',').joinToString(" + ") { protoName(it) }
-                text = "${s.host} · $protos"
+                text = "${s.host} · $protos" +
+                        if (s.autoPorts > 0) "\n" + getString(R.string.srv_auto_ports_on, s.autoPorts) else ""
                 textSize = 13f
                 setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
             })
@@ -241,6 +242,8 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         val entries = listOfNotNull(
             tgItem?.let { 4 to it },
             5 to getString(R.string.srv_m_sni),
+            6 to getString(R.string.srv_m_shuffle),
+            if (s.role != "exit") 7 to getString(R.string.srv_m_auto_ports) else null,
             0 to getString(R.string.srv_m_rotate), 1 to getString(R.string.srv_m_ports),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
         )
@@ -249,6 +252,25 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .setTitle(s.name)
             .setItems(items) { _, pos ->
                 when (entries[pos].first) {
+                    6 -> MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.srv_m_shuffle)
+                        .setMessage(R.string.srv_shuffle_msg)
+                        .setPositiveButton(R.string.srv_rotate_yes) { _, _ -> Deployer.shufflePorts(s); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+
+                    7 -> {
+                        val values = intArrayOf(0, 1, 3, 7)
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(R.string.srv_m_auto_ports)
+                            .setSingleChoiceItems(R.array.srv_auto_ports_names, values.indexOf(s.autoPorts).coerceAtLeast(0)) { d, i ->
+                                d.dismiss()
+                                if (values[i] != s.autoPorts) { Deployer.setAutoPorts(s, values[i]); scrollTop() }
+                            }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                    }
+
                     5 -> {
                         Deployer.findSites(s) { sites ->
                             if (!isAdded) return@findSites

@@ -73,6 +73,7 @@ object Deployer {
         node.vpnPort = i.optInt("port", node.vpnPort); node.xhPort = i.optInt("xhPort", node.xhPort)
         node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
         node.tgPort = i.optInt("tgPort", node.tgPort)
+        node.autoPorts = i.optInt("autoPorts", node.autoPorts)
     }
 
     private fun telegramOf(json: JSONObject?) = json?.optString("telegram").orEmpty()
@@ -280,6 +281,41 @@ object Deployer {
             ServerStore.upsert(node)
             finish(true, if (node.role == "exit") "Маскировка сменена." else
                 "Маскировка: $domain. Профили обновлены ($n), у остальных устройств подписка обновится сама.")
+        }
+    }
+
+    /** Random new ports for the VPN protocols; keys, the Telegram proxy and the subscription stay. */
+    fun shufflePorts(node: ServerNode) {
+        if (!start("Новые порты для ${node.name}")) return
+        runOnDefaultDispatcher {
+            val args = if (node.role == "exit") listOf("shuffle-ports", "--relink") else listOf("shuffle-ports")
+            val r = SshRunner(node, ::emit).run(args)
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить порты")
+            syncInfo(node, r.json)
+            ServerStore.upsert(node)
+            if (node.role == "exit") {
+                val bridge = r.json.optString("bridge")
+                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
+                if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Порты сменены.")
+                emit("── Переключаю входной сервер ${entry.name} на новый порт")
+                val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
+                return@runOnDefaultDispatcher finish(true, "Порты выходного сервера сменены, каскад работает.")
+            }
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Порты сменены, профили обновлены ($n). Telegram-прокси не тронут, устройства с подпиской обновятся сами.")
+        }
+    }
+
+    fun setAutoPorts(node: ServerNode, days: Int) {
+        if (!start(if (days > 0) "Автосмена портов на ${node.name}" else "Выключаю автосмену портов на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("auto-ports", "--every", days.toString()))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
+            syncInfo(node, r.json)
+            ServerStore.upsert(node)
+            finish(true, if (days > 0) "Порты будут меняться раз в $days дн. Устройства с подпиской подхватят их сами." else "Автосмена портов выключена.")
         }
     }
 

@@ -33,6 +33,7 @@ import io.nekohasekai.sagernet.bg.SagerConnection
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProfileManager
+import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.database.ProxyGroup
 import io.nekohasekai.sagernet.database.SubscriptionBean
 import io.nekohasekai.sagernet.database.preference.OnPreferenceDataStoreChangeListener
@@ -395,19 +396,35 @@ class MainActivity : ThemedActivity(),
     private var autoPicking = false
     private var shownSelected = 0L
 
+    /** Own server with a subscription: fetch the current ports/keys first if the copy is a few hours old. */
+    private suspend fun refreshOwnSubscription() {
+        val profile = runCatching { ProfileManager.getProfile(DataStore.selectedProxy) }.getOrNull() ?: return
+        val group = SagerDatabase.groupDao.getById(profile.groupId) ?: return
+        val sub = group.subscription ?: return
+        if (!sub.link.orEmpty().contains("#kbpin=")) return
+        if (System.currentTimeMillis() / 1000 - (sub.lastUpdated ?: 0) < 3 * 3600) return
+        kotlinx.coroutines.withTimeoutOrNull(10_000) {
+            runCatching { io.nekohasekai.sagernet.group.GroupUpdater.executeUpdate(group, false) }
+        }
+    }
+
     fun toggleService() {
         if (DataStore.serviceState.canStop) {
             SagerNet.stopService()
             return
         }
         if (!DataStore.kbAutoServer) {
-            connect.launch(null)
+            runOnDefaultDispatcher {
+                refreshOwnSubscription()
+                onMainDispatcher { connect.launch(null) }
+            }
             return
         }
         if (autoPicking) return
         autoPicking = true
         statusCard?.setSearching(true)
         runOnDefaultDispatcher {
+            refreshOwnSubscription()
             val currentId = DataStore.selectedProxy
             val profiles = io.nekohasekai.sagernet.kombain.AutoPick.groupOf(currentId)
             val result = runCatching {
