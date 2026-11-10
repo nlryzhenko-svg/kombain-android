@@ -782,4 +782,24 @@
     <string name="ab_core_engine">Ядро и маршрутизация</string>
     <string name="ab_xray_engine">Движок для VLESS Reality</string>
     <string name="ab_not_bundled">не встроен</string>
+    <string name="ks_watchdog">Сторож связи</string>
+    <string name="ks_watchdog_sum">Каждые 30 секунд проверяет, что интернет через VPN работает, и сам переподключается, если связь «зависла»</string>
+    <string name="kh_kbWatchdog">Пока VPN включён, Kombain раз в 30 секунд делает проверочный запрос через сервер. Если три проверки подряд не прошли, а обычный интернет у телефона есть, он сбрасывает соединения и переподключается — как если бы вы выключили и включили VPN сами. Если «Автовыбор сервера» включён, вместо этого переходит на живой сервер из той же группы. Без интернета у телефона (метро, лифт) сторож ничего не делает.</string>
+    <string name="ks_auto">Автовыбор сервера</string>
+    <string name="ks_auto_sum">При подключении выбирать самый быстрый живой сервер группы, а при падении — переходить на другой</string>
+    <string name="kh_kbAutoServer">При нажатии кнопки подключения Kombain проверяет все серверы текущей группы и подключается к самому быстрому из работающих. Если выбранный сервер работает и не сильно медленнее лучшего, остаётся на нём. Вместе со сторожем связи: когда сервер перестаёт отвечать, VPN переходит на другой сервер группы. Удобно, когда в группе несколько ваших нод или подписка.</string>
+    <string name="kb_wd_reconnect">Связь через «%s» зависла — переподключаю</string>
+    <string name="kb_wd_switch">«%1$s» не отвечает — переключаюсь на «%2$s»</string>
+    <string name="kb_wd_none">Ни один сервер группы не отвечает — переподключаю</string>
+    <string name="kb_searching">Ищу лучший сервер…</string>
+    <string name="kb_auto_none">Серверы не ответили на проверку — подключаюсь к выбранному</string>
+    <string name="kb_test_all">Проверить все</string>
+    <string name="kb_test_running">Проверяю серверы…</string>
+    <string name="kb_test_result">Работают %1$d из %2$d · быстрее всех «%3$s» — %4$d мс</string>
+    <string name="kb_test_none">Ни один из %d серверов не ответил</string>
+    <string name="kb_test_pick">Выбрать</string>
+    <string name="kb_test_dead">нет связи</string>
+    <string name="kb_auto_badge">Авто</string>
+    <string name="kb_hint_off_auto">Нажмите — выберу быстрый сервер</string>
+    <string name="kb_checking">проверка…</string>
 </resources>

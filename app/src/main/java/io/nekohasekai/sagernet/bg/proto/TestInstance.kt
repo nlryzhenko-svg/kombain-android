@@ -28,8 +28,18 @@ class TestInstance(profile: ProxyEntity, val link: String, private val timeout: 
                         init()
                         launch()
                         if (processes.processCount > 0) {
-                            // wait for plugin start
-                            delay(500)
+                            // wait for plugin start: until its local port accepts (Xray can take seconds on slow phones)
+                            delay(300)
+                            val deadline = System.currentTimeMillis() + 6000
+                            for (port in pluginConfigs.keys) {
+                                while (System.currentTimeMillis() < deadline) {
+                                    val ok = runCatching {
+                                        java.net.Socket().use { it.connect(java.net.InetSocketAddress("127.0.0.1", port), 300) }
+                                    }.isSuccess
+                                    if (ok) break
+                                    delay(150)
+                                }
+                            }
                         }
                         c.tryResume(Libcore.urlTest(box, link, timeout))
                     } catch (e: Exception) {

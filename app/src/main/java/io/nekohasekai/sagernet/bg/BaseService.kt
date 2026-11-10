@@ -237,6 +237,7 @@ class BaseService {
             DataStore.vpnService = null
 
             if (data.state == State.Stopping) return
+            Watchdog.stop()
             data.notification?.destroy()
             data.notification = null
             this as Service
@@ -374,6 +375,7 @@ class BaseService {
                     data.changeState(State.Connected)
 
                     lateInit()
+                    Watchdog.start(this@Interface)
                 } catch (_: CancellationException) { // if the job was cancelled, it is canceller's responsibility to call stopRunner
                 } catch (_: UnknownHostException) {
                     stopRunner(false, getString(R.string.invalid_server))

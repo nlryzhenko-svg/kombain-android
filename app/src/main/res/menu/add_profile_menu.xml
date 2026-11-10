@@ -8,6 +8,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/action_test_all"
+        android:icon="@drawable/ic_kombain_speed"
+        android:title="@string/kb_test_all"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_add"
         android:icon="@drawable/ic_kombain_add"
         android:title="@string/add_profile"

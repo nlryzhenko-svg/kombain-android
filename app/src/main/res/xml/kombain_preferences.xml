@@ -50,6 +50,18 @@
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_stable">
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_shield_check"
+            app:key="kbWatchdog"
+            app:summary="@string/ks_watchdog_sum"
+            app:title="@string/ks_watchdog" />
+        <SwitchPreference
+            app:defaultValue="false"
+            app:icon="@drawable/ic_kombain_auto"
+            app:key="kbAutoServer"
+            app:summary="@string/ks_auto_sum"
+            app:title="@string/ks_auto" />
         <Preference
             app:icon="@drawable/ic_baseline_battery_charging_full_24"
             app:key="ks_battery"

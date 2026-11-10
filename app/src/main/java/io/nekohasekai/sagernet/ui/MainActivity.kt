@@ -382,8 +382,56 @@ class MainActivity : ThemedActivity(),
     }
     var statusCard: StatusCardController? = null
 
+    private var autoPicking = false
+    private var shownSelected = 0L
+
     fun toggleService() {
-        if (DataStore.serviceState.canStop) SagerNet.stopService() else connect.launch(null)
+        if (DataStore.serviceState.canStop) {
+            SagerNet.stopService()
+            return
+        }
+        if (!DataStore.kbAutoServer) {
+            connect.launch(null)
+            return
+        }
+        if (autoPicking) return
+        autoPicking = true
+        statusCard?.setSearching(true)
+        runOnDefaultDispatcher {
+            val currentId = DataStore.selectedProxy
+            val profiles = io.nekohasekai.sagernet.kombain.AutoPick.groupOf(currentId)
+            val result = runCatching {
+                io.nekohasekai.sagernet.kombain.AutoPick.test(profiles)
+            }.getOrNull()
+            val chosen = result?.let { io.nekohasekai.sagernet.kombain.AutoPick.choose(it, currentId) }
+            if (chosen != null && chosen.id != currentId) {
+                DataStore.selectedProxy = chosen.id
+                ProfileManager.postUpdate(currentId)
+                ProfileManager.postUpdate(chosen.id)
+            }
+            onMainDispatcher {
+                autoPicking = false
+                statusCard?.setSearching(false)
+                statusCard?.refreshProfile()
+                if (chosen == null && profiles.size > 1) snackbar(getString(R.string.kb_auto_none)).show()
+                connect.launch(null)
+            }
+        }
+    }
+
+    /** The VPN process may have moved to another server (watchdog / auto) — refresh highlights. */
+    private fun syncSelection() {
+        runOnDefaultDispatcher {
+            val now = DataStore.selectedProxy
+            val old = shownSelected
+            shownSelected = now
+            if (old != 0L && old != now) {
+                runCatching {
+                    ProfileManager.postUpdate(old)
+                    ProfileManager.postUpdate(now)
+                }
+            }
+        }
     }
 
     private fun changeState(
@@ -398,12 +446,16 @@ class MainActivity : ThemedActivity(),
         binding.fab.visibility = View.GONE
         binding.stats.visibility = View.GONE
         statusCard?.onState(state)
+        if (state == BaseService.State.Connected || state == BaseService.State.Stopped) syncSelection()
         if (msg != null) snackbar(getString(R.string.vpn_error, msg)).show()
     }
 
     override fun snackbarInternal(text: CharSequence): Snackbar {
         return Snackbar.make(binding.coordinator, text, Snackbar.LENGTH_LONG).apply {
             anchorView = binding.bottomNav
+            setBackgroundTint(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_card))
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_on_card))
+            setActionTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.kombain_accent))
             // TODO
         }
     }

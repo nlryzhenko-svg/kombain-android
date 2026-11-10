@@ -385,6 +385,7 @@ class ConfigurationFragment @JvmOverloads constructor(
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_add -> showAddSheet()
+            R.id.action_test_all -> testAll()
 
             R.id.action_scan_qr_code -> {
                 startActivity(Intent(context, ScannerActivity::class.java))
@@ -877,6 +878,62 @@ class ConfigurationFragment @JvmOverloads constructor(
     }
 
     @OptIn(DelicateCoroutinesApi::class)
+    /** Kombain «Проверить все»: quiet check of the visible group, results right in the rows. */
+    fun testAll() {
+        if (DataStore.runningTest) return
+        DataStore.runningTest = true
+        val ctx = requireContext()
+        val main = activity as? MainActivity
+        main?.snackbar(getString(R.string.kb_test_running))?.show()
+        runOnDefaultDispatcher {
+            try {
+                val group = DataStore.currentGroup()
+                val profiles = SagerDatabase.proxyDao.getByGroup(group.id)
+                if (profiles.isEmpty()) return@runOnDefaultDispatcher
+                kbTestingIds.addAll(profiles.map { it.id })
+                profiles.forEach { ProfileManager.postUpdate(it, true) }
+                val result = io.nekohasekai.sagernet.kombain.AutoPick.test(profiles, onEach = {
+                    kbTestingIds.remove(it.id)
+                })
+                val best = result.best
+                onMainDispatcher {
+                    val m = activity as? MainActivity ?: return@onMainDispatcher
+                    if (best == null) {
+                        m.snackbar(ctx.getString(R.string.kb_test_none, result.total)).show()
+                    } else {
+                        m.snackbar(
+                            ctx.getString(
+                                R.string.kb_test_result, result.alive.size, result.total,
+                                best.first.displayName(), best.second
+                            )
+                        ).apply {
+                            if (best.first.id != DataStore.selectedProxy) {
+                                setAction(R.string.kb_test_pick) { selectProfile(best.first.id) }
+                            }
+                            duration = 8000
+                        }.show()
+                    }
+                }
+            } finally {
+                kbTestingIds.clear()
+                DataStore.runningTest = false
+            }
+        }
+    }
+
+    /** Make [id] the active server (and switch the running VPN to it). */
+    fun selectProfile(id: Long) {
+        runOnDefaultDispatcher {
+            val old = DataStore.selectedProxy
+            if (old == id) return@runOnDefaultDispatcher
+            DataStore.selectedProxy = id
+            ProfileManager.postUpdate(old)
+            ProfileManager.postUpdate(id)
+            onMainDispatcher { (activity as? MainActivity)?.statusCard?.refreshProfile() }
+            if (DataStore.serviceState.canStop) SagerNet.reloadService()
+        }
+    }
+
     fun urlTest() {
         if (DataStore.runningTest) return else DataStore.runningTest = true
         val test = TestDialog()
@@ -1629,7 +1686,11 @@ class ConfigurationFragment @JvmOverloads constructor(
                 (trafficText.parent as View).isGone =
                     (!showTraffic || proxyEntity.status <= 0) && address.isBlank()
 
-                if (proxyEntity.status <= 0) {
+                val kbTesting = kbTestingIds.contains(proxyEntity.id)
+                if (kbTesting) {
+                    profileStatus.text = getString(R.string.kb_checking)
+                    profileStatus.setTextColor(requireContext().getColorAttr(android.R.attr.textColorSecondary))
+                } else if (proxyEntity.status <= 0) {
                     if (showTraffic) {
                         profileStatus.text = trafficText.text
                         profileStatus.setTextColor(requireContext().getColorAttr(android.R.attr.textColorSecondary))
@@ -1647,10 +1708,9 @@ class ConfigurationFragment @JvmOverloads constructor(
                     }
                 }
 
-                if (proxyEntity.status == 3) {
+                if (proxyEntity.status == 3 && !kbTesting) {
                     val err = proxyEntity.error ?: "<?>"
-                    val msg = Protocols.genFriendlyMsg(err)
-                    profileStatus.text = if (msg != err) msg else getString(R.string.unavailable)
+                    profileStatus.text = getString(R.string.kb_test_dead)
                     profileStatus.setOnClickListener {
                         alert(err).tryToShow()
                     }
@@ -1810,6 +1870,9 @@ class ConfigurationFragment @JvmOverloads constructor(
 }
 
 /** Two-letter protocol mark for the server row badge. */
+/** Ids being checked right now by «Проверить все» — their rows show «проверка…». */
+val kbTestingIds: MutableSet<Long> = java.util.Collections.synchronizedSet(mutableSetOf())
+
 fun kombainBadge(p: ProxyEntity): String = when (p.type) {
     ProxyEntity.TYPE_VMESS -> if (p.vmessBean?.isVLESS == true) "VL" else "VM"
     ProxyEntity.TYPE_TROJAN, ProxyEntity.TYPE_TROJAN_GO -> "TR"

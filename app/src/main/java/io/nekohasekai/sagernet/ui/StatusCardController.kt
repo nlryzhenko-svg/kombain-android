@@ -51,6 +51,17 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     private var state = BaseService.State.Idle
     private var testResult: String? = null
     private var testing = false
+    private var searching = false
+
+    fun setSearching(on: Boolean) {
+        searching = on
+        if (on) {
+            progress.isVisible = true
+            title.setText(R.string.kb_searching)
+            detail.typeface = android.graphics.Typeface.DEFAULT
+            detail.setText(R.string.kb_test_running)
+        } else onState(state)
+    }
 
     init {
         knob.setOnClickListener {
@@ -88,7 +99,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         ticker.removeCallbacks(tick)
         updateTitle()
         if (connected) ticker.postDelayed(tick, 1000)
-        progress.isVisible = busy || testing
+        progress.isVisible = busy || testing || searching
         knob.alpha = if (busy) 0.7f else 1f
         knobIcon.background.mutate().setTint(
             if (connected) 0xFF2FE3A6.toInt() else 0x33FFFFFF
@@ -97,7 +108,11 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         if (!connected) {
             detail.typeface = android.graphics.Typeface.DEFAULT
             detail.text = ctx.getString(
-                if (newState == BaseService.State.Connecting) R.string.kb_hint_connecting else R.string.kb_hint_off
+                when {
+                    newState == BaseService.State.Connecting -> R.string.kb_hint_connecting
+                    DataStore.kbAutoServer -> R.string.kb_hint_off_auto
+                    else -> R.string.kb_hint_off
+                }
             )
         } else if (testResult == null) {
             onSpeed(0, 0)
@@ -107,6 +122,10 @@ class StatusCardController(root: View, private val activity: MainActivity) {
 
     private fun updateTitle() {
         val ctx = card.context
+        if (searching) {
+            title.setText(R.string.kb_searching)
+            return
+        }
         title.text = when (state) {
             BaseService.State.Connected -> {
                 val sec = ((SystemClock.elapsedRealtime() - connectedSince) / 1000).coerceAtLeast(0)
