@@ -23,16 +23,18 @@
         android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="18dp">
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="8dp">
 
         <!-- power knob -->
+        <!-- 96dp box: the pulse ring grows from the 76dp knob up to the box edge, never past it -->
         <FrameLayout
             android:id="@+id/status_knob"
-            android:layout_width="76dp"
-            android:layout_height="76dp"
-            android:background="@drawable/kombain_knob_ring"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
             android:clickable="true"
-            android:clipChildren="false"
             android:contentDescription="@string/kb_toggle"
             android:focusable="true">
 
@@ -43,6 +45,12 @@
                 android:alpha="0"
                 android:background="@drawable/kombain_knob_pulse" />
 
+            <View
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_gravity="center"
+                android:background="@drawable/kombain_knob_ring" />
+
             <ImageView
                 android:id="@+id/status_knob_icon"
                 android:layout_width="58dp"
@@ -52,21 +60,18 @@
                 android:padding="15dp"
                 android:src="@drawable/ic_kombain_power" />
 
-            <com.google.android.material.progressindicator.CircularProgressIndicator
+            <io.nekohasekai.sagernet.ui.KnobSpinner
                 android:id="@+id/status_progress"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:indeterminate="true"
-                android:visibility="gone"
-                app:indicatorColor="@color/kombain_accent"
-                app:indicatorSize="76dp"
-                app:trackThickness="3dp" />
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_gravity="center"
+                android:visibility="gone" />
         </FrameLayout>
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="18dp"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:orientation="vertical">
 

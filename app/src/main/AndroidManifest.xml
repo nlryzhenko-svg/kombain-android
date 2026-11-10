@@ -299,18 +299,6 @@
             </intent-filter>
         </service>
 
-        <receiver
-            android:name="io.nekohasekai.sagernet.kombain.KombainWidget"
-            android:exported="true"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/kombain_widget_info" />
-        </receiver>
-
         <service
             android:name="io.nekohasekai.sagernet.bg.TileService"
             android:exported="true"

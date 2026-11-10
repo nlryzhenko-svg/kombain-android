@@ -11,7 +11,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.widget.ImageView
-import com.google.android.material.progressindicator.CircularProgressIndicator
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.BaseService
 import io.nekohasekai.sagernet.database.DataStore
@@ -34,7 +33,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     private val detail: TextView = root.findViewById(R.id.status_detail)
     private val knob: View = root.findViewById(R.id.status_knob)
     private val knobIcon: ImageView = root.findViewById(R.id.status_knob_icon)
-    private val progress: CircularProgressIndicator = root.findViewById(R.id.status_progress)
+    private val progress: KnobSpinner = root.findViewById(R.id.status_progress)
     private val pulse: View = root.findViewById(R.id.status_pulse)
     private val graph: io.nekohasekai.sagernet.widget.SpeedGraphView = root.findViewById(R.id.status_graph)
     private var pulseAnim: android.animation.Animator? = null
@@ -162,8 +161,8 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         pulseAnim?.cancel(); pulseAnim = null
         pulse.alpha = 0f
         if (!on) return
-        val sx = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 0.8f, 1.25f)
-        val sy = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.8f, 1.25f)
+        val sx = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 0.79f, 1f)
+        val sy = android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.79f, 1f)
         val a = android.animation.PropertyValuesHolder.ofFloat(View.ALPHA, 0.9f, 0f)
         pulseAnim = android.animation.ObjectAnimator.ofPropertyValuesHolder(pulse, sx, sy, a).apply {
             duration = 1200

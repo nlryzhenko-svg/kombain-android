@@ -86,9 +86,6 @@ class BaseService {
             state = s
             DataStore.serviceState = s
             binder.stateChanged(s, msg)
-            io.nekohasekai.sagernet.kombain.KombainWidget.update(
-                io.nekohasekai.sagernet.ktx.app, s, proxy?.displayProfileName
-            )
         }
     }
 
