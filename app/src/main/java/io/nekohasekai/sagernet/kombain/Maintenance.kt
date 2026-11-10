@@ -147,6 +147,9 @@ object Maintenance {
             if (DataStore.kbWatchServers) runCatching { checkServers(applicationContext) }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoSubs) runCatching { updateSubscriptions() }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoGeo) runCatching { updateGeo() }.onFailure { Logs.w(it) }
+            if (DataStore.kbAutoGeo && BlockedLists.enabled &&
+                System.currentTimeMillis() - DataStore.kbListsUpdated > 20 * 3600_000L
+            ) runCatching { BlockedLists.update() }.onFailure { Logs.w(it) }
             return Result.success()
         }
     }

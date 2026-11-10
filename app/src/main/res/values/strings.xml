@@ -849,6 +849,33 @@
     <string name="kh_kbWatchServers">Для серверов из «Мои серверы» Kombain раз в 6 часов заходит по SSH, проверяет службы, память и диск. Если служба остановилась или сервер не отвечает — придёт уведомление.</string>
     <string name="kb_widget_desc">Включить или выключить VPN одним касанием</string>
     <string name="srv_just_now">только что</string>
+    <string name="ks_route_mode">Что пускать через VPN</string>
+    <string name="srv_sni_pick">Подобрать сайт рядом с сервером</string>
+    <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — Kombain зайдёт на него и проверит соседей</string>
+    <string name="srv_sni_searching">Проверяю сайты рядом с сервером…\nЭто до минуты, на сервере ничего не меняется.</string>
+    <string name="srv_sni_title">Сайт для маскировки</string>
+    <string name="srv_sni_none">Рядом с сервером подходящих сайтов не нашлось. Оставьте %s — тоже работает.</string>
+    <string name="srv_sni_item">%1$s · %2$d мс</string>
+    <string name="srv_sni_hint">Сайты в той же сети, что и ваш сервер: для ТСПУ трафик к ним выглядит естественно. Сверху — самые быстрые.</string>
+    <string name="srv_m_sni">Подобрать сайт для маскировки</string>
+    <string name="srv_sni_apply_msg">Маскировка сменится на %s. Ключи останутся прежними, но ссылки изменятся: этот телефон и устройства с подпиской обновятся сами, остальным нужно отправить новые QR-коды.</string>
+    <string name="srv_sni_apply">Сменить</string>
+    <string name="srv_sub_title">Ссылка-подписка</string>
+    <string name="srv_sub_sub">Для Kombain на другом телефоне — ключи будут обновляться сами</string>
+    <string name="srv_sub_qr">QR-код подписки</string>
+    <string name="srv_sub_qr_hint">Отсканируйте в Kombain: «+» → «Сканировать QR-код»</string>
+    <string name="srv_sub_copy">Скопировать ссылку-подписку</string>
+    <string name="srv_sub_send">Отправить ссылку-подписку</string>
+    <string name="srv_sub_copied">Ссылка-подписка скопирована — вставьте её в Kombain через «+» → «Из буфера обмена»</string>
+    <string-array name="ks_route_mode_names">
+        <item>Весь трафик</item>
+        <item>Только заблокированное в РФ</item>
+    </string-array>
+    <string-array name="ks_route_mode_values">
+        <item>all</item>
+        <item>blocked</item>
+    </string-array>
+    <string name="kh_kbRouteMode">«Весь трафик» — всё идёт через сервер. «Только заблокированное в РФ» — через VPN идут только заблокированные в России сайты и сервисы (YouTube, Instagram, Discord, ChatGPT, Telegram и тысячи других), всё остальное — напрямую: банки и Госуслуги видят российский IP, скорость выше, трафика на сервере уходит меньше. Список (около 75 тысяч доменов и адреса заблокированных сетей) от проекта runetfreedom, Kombain обновляет его раз в день.</string>
     <string name="srv_p_tg">Прокси для Telegram — Telegram работает и без VPN (MTProto, маскировка под сайт)</string>
     <string name="srv_tg_port">Порт Telegram (TCP)</string>
     <string name="srv_err_vpn_proto">Выберите хотя бы один VPN-протокол</string>

@@ -17,6 +17,8 @@ class NodeResult(
     val json: JSONObject?,
     /** server health from `stats` */
     val stats: JSONObject? = null,
+    /** find-sni: [{domain, dest, ms}] best first */
+    val sites: org.json.JSONArray? = null,
 )
 
 /**
@@ -104,6 +106,7 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
 
             var result: JSONObject? = null
             var stats: JSONObject? = null
+            var sites: org.json.JSONArray? = null
             var error: String? = null
             val code = exec(s, cmd, stdin) { line ->
                 when {
@@ -115,6 +118,10 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
 
                     line.startsWith("KB_RESULT ") -> result = runCatching {
                         JSONObject(String(Base64.decode(line.removePrefix("KB_RESULT ").trim(), Base64.DEFAULT)))
+                    }.getOrNull()
+
+                    line.startsWith("KB_SNI ") -> sites = runCatching {
+                        org.json.JSONArray(String(Base64.decode(line.removePrefix("KB_SNI ").trim(), Base64.DEFAULT)))
                     }.getOrNull()
 
                     line.startsWith("KB_STATS ") -> stats = runCatching {
@@ -129,8 +136,8 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
                 error = if (!root) "Команда завершилась с кодом $code (нужен sudo без ограничений или вход под root)"
                 else "Команда завершилась с кодом $code"
             }
-            val ok = error == null && (result != null || stats != null || args.firstOrNull() in setOf("status", "uninstall"))
-            return NodeResult(ok, error, result, stats)
+            val ok = error == null && (result != null || stats != null || sites != null || args.firstOrNull() in setOf("status", "uninstall"))
+            return NodeResult(ok, error, result, stats, sites)
         } catch (e: Exception) {
             return NodeResult(false, "Ошибка SSH: ${e.message}", null)
         } finally {

@@ -28,6 +28,14 @@
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_route">
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="all"
+            app:entries="@array/ks_route_mode_names"
+            app:entryValues="@array/ks_route_mode_values"
+            app:icon="@drawable/ic_kombain_globe"
+            app:key="kbRouteMode"
+            app:title="@string/ks_route_mode"
+            app:useSimpleSummaryProvider="true" />
         <SwitchPreference
             app:icon="@drawable/ic_maps_directions"
             app:key="ks_ru_direct"

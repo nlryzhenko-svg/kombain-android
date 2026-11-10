@@ -36,6 +36,7 @@ import io.nekohasekai.sagernet.ktx.dp2px
 import io.nekohasekai.sagernet.ktx.needReload
 import io.nekohasekai.sagernet.ktx.needRestart
 import io.nekohasekai.sagernet.ktx.onMainDispatcher
+import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
 import io.nekohasekai.sagernet.utils.Theme
 import io.nekohasekai.sagernet.widget.ListListener
@@ -124,6 +125,19 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
             )
         }
 
+        findPreference<Preference>("kbRouteMode")!!.setOnPreferenceChangeListener { _, v ->
+            if (v == "blocked") runOnDefaultDispatcher {
+                // the bundled snapshot works at once; a fresh download follows in the background
+                runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.ensure() }.onFailure { Logs.w(it) }
+                if (DataStore.serviceState.started) SagerNet.reloadService()
+                if (System.currentTimeMillis() - DataStore.kbListsUpdated > 20 * 3600_000L) {
+                    runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.update() }.onFailure { Logs.w(it) }
+                    if (DataStore.serviceState.started) SagerNet.reloadService()
+                }
+            } else if (DataStore.serviceState.started) SagerNet.reloadService()
+            true
+        }
+
         bank = findPreference("kbBankDirect")!!
         bank.onPreferenceChangeListener = reload
         val upkeep = Preference.OnPreferenceChangeListener { _, _ ->
@@ -134,7 +148,13 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         geoNow.setOnPreferenceClickListener {
             geoNow.setSummary(R.string.ks_geo_running)
             runOnDefaultDispatcher {
-                val changed = runCatching { io.nekohasekai.sagernet.kombain.Maintenance.updateGeo(force = true) }.getOrDefault(false)
+                var changed = runCatching { io.nekohasekai.sagernet.kombain.Maintenance.updateGeo(force = true) }.getOrDefault(false)
+                if (io.nekohasekai.sagernet.kombain.BlockedLists.enabled) {
+                    if (runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.update() }.onFailure { Logs.w(it) }.isSuccess) {
+                        changed = true
+                        if (DataStore.serviceState.started) SagerNet.reloadService()
+                    }
+                }
                 onMainDispatcher {
                     if (!isAdded) return@onMainDispatcher
                     updateGeoSummary()

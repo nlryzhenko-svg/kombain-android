@@ -85,7 +85,7 @@ object UsersSheet {
                     setTextColor(ContextCompat.getColor(ctx, if (danger) R.color.kombain_danger else R.color.kombain_fab))
                     setOnClickListener { onClick() }
                 })
-            btn(R.string.srv_users_qr) { showUser(f, node, u, json) }
+            btn(R.string.srv_users_qr) { sheet.dismiss(); showUser(f, node, u, json) }
             if (users.size > 1) btn(R.string.srv_users_remove, true) {
                 MaterialAlertDialogBuilder(ctx)
                     .setMessage(ctx.getString(R.string.srv_users_remove_msg, u))
@@ -189,7 +189,35 @@ object UsersSheet {
                 }, null))
             },
         )
+        val subUrl = json.optJSONArray("subs")?.let { a ->
+            (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("user") == user }?.optString("url")
+        }.orEmpty()
+        val subAction = if (subUrl.isBlank()) emptyList() else listOf(
+            ActionSheet.Action(R.drawable.ic_kombain_auto, ctx.getString(R.string.srv_sub_title), ctx.getString(R.string.srv_sub_sub)) {
+                showSub(f, node, user, subUrl)
+            })
         sheet.dismiss()
-        ActionSheet.show(ctx, "$user · ${node.name}", actions)
+        ActionSheet.show(ctx, "$user · ${node.name}", subAction + actions)
+    }
+
+    /** sn://subscription link: Kombain on another phone adds it as a subscription (QR scan or clipboard). */
+    private fun showSub(f: androidx.fragment.app.Fragment, node: ServerNode, user: String, url: String) {
+        val ctx = f.context ?: return
+        val name = "${node.name} · $user"
+        val link = "sn://subscription?url=" + java.net.URLEncoder.encode(url, "UTF-8") +
+                "&name=" + java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")
+        ActionSheet.show(ctx, ctx.getString(R.string.srv_sub_title) + " · " + user, listOf(
+            ActionSheet.Action(R.drawable.ic_kombain_qr, ctx.getString(R.string.srv_sub_qr), ctx.getString(R.string.srv_sub_qr_hint)) {
+                QRCodeDialog(link, name).showAllowingStateLoss(f.parentFragmentManager)
+            },
+            ActionSheet.Action(R.drawable.ic_kombain_copy, ctx.getString(R.string.srv_sub_copy)) {
+                if (SagerNet.trySetPrimaryClip(link)) f.snackbar(R.string.srv_sub_copied).show()
+            },
+            ActionSheet.Action(R.drawable.ic_kombain_share, ctx.getString(R.string.srv_sub_send)) {
+                f.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, link)
+                }, null))
+            },
+        ))
     }
 }

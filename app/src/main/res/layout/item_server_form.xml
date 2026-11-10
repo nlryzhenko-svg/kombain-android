@@ -159,5 +159,17 @@
                 android:inputType="textUri"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/f_sni_pick"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:text="@string/srv_sni_pick"
+            android:textAllCaps="false"
+            android:textColor="@color/kombain_fab"
+            app:icon="@drawable/ic_kombain_auto"
+            app:iconTint="@color/kombain_fab" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

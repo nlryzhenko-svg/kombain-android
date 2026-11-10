@@ -57,21 +57,26 @@ object RawUpdater : GroupUpdater() {
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
 
+            // Kombain: own servers serve the subscription with a self-signed certificate pinned in the link
+            val kbPin = link.substringAfter("#kbpin=", "").takeIf { it.length == 64 }
             val response = Libcore.newHttpClient().apply {
                 trySocks5(DataStore.mixedPort)
                 tryH3Direct()
                 when (DataStore.appTLSVersion) {
                     "1.3" -> restrictedTLS()
                 }
+                if (kbPin != null) pinnedSHA256(kbPin)
             }.newRequest().apply {
-                if (DataStore.allowInsecureOnRequest) {
+                if (DataStore.allowInsecureOnRequest || kbPin != null) {
                     allowInsecure()
                 }
-                setURL(subscription.link)
+                setURL(if (kbPin != null) link.substringBefore('#') else subscription.link)
                 setUserAgent(subscription.customUserAgent.takeIf { it.isNotBlank() } ?: USER_AGENT)
             }.execute()
             proxies = parseRaw(Util.getStringBox(response.contentString))
                 ?: error(app.getString(R.string.no_proxies_found))
+            // our servers run current Xray: VLESS goes through the Xray engine, as when imported over SSH
+            if (kbPin != null) proxies.forEach { (it as? io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean)?.xrayEngine = true }
 
             subscription.subscriptionUserinfo =
                 Util.getStringBox(response.getHeader("Subscription-Userinfo"))

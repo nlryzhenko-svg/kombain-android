@@ -5,6 +5,7 @@ import io.nekohasekai.sagernet.database.GroupManager
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.database.ProxyGroup
 import io.nekohasekai.sagernet.database.SagerDatabase
+import io.nekohasekai.sagernet.ktx.applyDefaultValues
 import io.nekohasekai.sagernet.ktx.onMainDispatcher
 import io.nekohasekai.sagernet.ktx.parseProxies
 import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
@@ -61,13 +62,14 @@ object Deployer {
         "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
         "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--tg-port", n.tgPort.toString(),
         "--name", n.name.trim(),
-    ) + extra
+    ) + (if (n.dest.isNotBlank()) listOf("--dest", n.dest) else emptyList()) + extra
 
     /** Keeps the stored node in step with what the server reports (protocols, ports). */
     private fun syncInfo(node: ServerNode, json: JSONObject) {
         val i = json.optJSONObject("info") ?: return
         i.optString("protocols").takeIf { it.isNotBlank() }?.let { node.protocols = it }
         i.optString("sni").takeIf { it.isNotBlank() }?.let { node.sni = it }
+        if (i.has("dest")) node.dest = i.optString("dest")
         node.vpnPort = i.optInt("port", node.vpnPort); node.xhPort = i.optInt("xhPort", node.xhPort)
         node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
         node.tgPort = i.optInt("tgPort", node.tgPort)
@@ -137,7 +139,7 @@ object Deployer {
     fun refreshLinks(node: ServerNode) {
         if (!start("Обновляю профили с ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("links"))
+            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось получить ссылки")
             syncInfo(node, r.json)
             val n = importLinks(node, groupName(node), r.json, replace = true, onlyFirstUser = true)
@@ -203,7 +205,7 @@ object Deployer {
     fun fetchLinks(node: ServerNode, done: (JSONObject?, String?) -> Unit) {
         if (!start("Пользователи ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("links"))
+            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
             r.json?.let { syncInfo(node, it) }
             ServerStore.upsert(node)
             if (!r.ok || r.json == null) finish(false, r.error ?: "не удалось получить ссылки")
@@ -219,7 +221,7 @@ object Deployer {
     fun connectExisting(node: ServerNode) {
         if (!start("Подключаю ${node.host}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("links"))
+            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
             val json = r.json
             if (!r.ok || json == null) {
                 return@runOnDefaultDispatcher finish(false, r.error ?: "на сервере не найден Kombain")
@@ -250,6 +252,34 @@ object Deployer {
                 "exit" -> "Выходной сервер каскада добавлен. Профили берутся с входного сервера."
                 else -> "Сервер добавлен, профилей — $n, группа «${groupName(node)}».${tgNote(json)}"
             })
+        }
+    }
+
+    /** Sites next to the server that suit Reality (no changes on the server). */
+    fun findSites(node: ServerNode, done: (org.json.JSONArray?) -> Unit) {
+        if (!start("Ищу сайт для маскировки рядом с ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("find-sni", "--host", node.host.trim()))
+            ServerStore.upsert(node)
+            val n = r.sites?.length() ?: 0
+            if (r.sites == null) finish(false, r.error ?: "не удалось проверить")
+            else finish(true, if (n > 0) "Найдено подходящих сайтов: $n — выберите один." else "Рядом подходящих сайтов нет — оставьте текущий.")
+            onMainDispatcher { done(r.sites) }
+        }
+    }
+
+    fun setSite(node: ServerNode, domain: String, dest: String) {
+        if (!start("Новый сайт для маскировки на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val args = mutableListOf("set-sni", "--sni", domain)
+            if (dest.isNotBlank()) args += listOf("--dest", dest)
+            val r = SshRunner(node, ::emit).run(args)
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить")
+            syncInfo(node, r.json)
+            val n = if (node.role != "exit") importLinks(node, groupName(node), r.json, replace = true) else 0
+            ServerStore.upsert(node)
+            finish(true, if (node.role == "exit") "Маскировка сменена." else
+                "Маскировка: $domain. Профили обновлены ($n), у остальных устройств подписка обновится сама.")
         }
     }
 
@@ -326,14 +356,30 @@ object Deployer {
         val firstUser = items.firstOrNull()?.optString("user")
         val chosen = if (onlyFirstUser) items.filter { it.optString("user") == firstUser } else items
 
+        // the first user's subscription keeps this device's profiles up to date after key changes
+        val subUrl = json.optJSONArray("subs")?.let { a ->
+            (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("user") == firstUser }?.optString("url")
+        }.orEmpty()
+        fun ProxyGroup.applySub() {
+            if (subUrl.isBlank()) return
+            type = io.nekohasekai.sagernet.GroupType.SUBSCRIPTION
+            subscription = (subscription ?: io.nekohasekai.sagernet.database.SubscriptionBean()).applyDefaultValues().apply {
+                link = subUrl
+                lastUpdated = (System.currentTimeMillis() / 1000).toInt()
+            }
+        }
         var groupId = node.groupId
         if (groupId == 0L || SagerDatabase.groupDao.getById(groupId) == null) {
-            groupId = GroupManager.createGroup(ProxyGroup(name = groupName)).id
+            groupId = GroupManager.createGroup(ProxyGroup(name = groupName).apply { applySub() }).id
             node.groupId = groupId
         } else {
-            SagerDatabase.groupDao.getById(groupId)?.takeIf { it.name != groupName }?.let {
-                it.name = groupName
-                GroupManager.updateGroup(it)
+            SagerDatabase.groupDao.getById(groupId)?.let {
+                val oldLink = it.subscription?.link
+                if (it.name != groupName || (subUrl.isNotBlank() && oldLink != subUrl)) {
+                    it.name = groupName
+                    it.applySub()
+                    GroupManager.updateGroup(it)
+                }
             }
             if (replace) {
                 SagerDatabase.proxyDao.deleteByGroup(groupId)

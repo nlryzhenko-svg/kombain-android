@@ -165,6 +165,9 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var kbAutoSubs by configurationStore.boolean("kbAutoSubs") { true }
     var kbAutoGeo by configurationStore.boolean("kbAutoGeo") { true }
     var kbGeoUpdated by configurationStore.long("kbGeoUpdated") { 0L }
+    /** all = everything through the VPN; blocked = only what is blocked in Russia */
+    var kbRouteMode by configurationStore.string("kbRouteMode") { "all" }
+    var kbListsUpdated by configurationStore.long("kbListsUpdated") { 0L }
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

@@ -62,6 +62,10 @@ class MainActivity : ThemedActivity(),
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // «только заблокированное»: prepare the lists in the background (building the config must not wait for it)
+        if (io.nekohasekai.sagernet.kombain.BlockedLists.enabled && !io.nekohasekai.sagernet.kombain.BlockedLists.ready()) {
+            runOnDefaultDispatcher { runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.ensure() } }
+        }
 
         binding = LayoutMainBinding.inflate(layoutInflater)
         binding.fab.initProgress(binding.fabProgress)

@@ -23,6 +23,7 @@ class ServerConnectFragment : ToolbarFragment(R.layout.layout_server_connect) {
         var p: View? = form.findViewById(R.id.f_sni)
         while (p != null && p !is TextInputLayout) p = p.parent as? View
         p?.visibility = View.GONE
+        form.findViewById<View>(R.id.f_sni_pick).visibility = View.GONE
         view.findViewById<View>(R.id.btn_connect_go).setOnClickListener { connect(form) }
     }
 

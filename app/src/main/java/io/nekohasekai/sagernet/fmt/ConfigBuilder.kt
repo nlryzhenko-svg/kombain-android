@@ -23,6 +23,7 @@ import io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean
 import io.nekohasekai.sagernet.fmt.v2ray.buildSingBoxOutboundStandardV2RayBean
 import io.nekohasekai.sagernet.fmt.wireguard.WireGuardBean
 import io.nekohasekai.sagernet.fmt.wireguard.buildSingBoxOutboundWireguardBean
+import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.isIpAddress
 import io.nekohasekai.sagernet.ktx.mkPort
 import io.nekohasekai.sagernet.utils.PackageCache
@@ -603,6 +604,50 @@ fun buildConfig(
             }
         }
 
+        // Kombain: the own servers' subscriptions are always fetched directly — so new keys arrive even when the old ones stopped working
+        if (!forTest) runCatching {
+            val subs = SagerDatabase.groupDao.allGroups().mapNotNull { it.subscription?.link }
+                .filter { it.contains("#kbpin=") }
+                .mapNotNull { runCatching { java.net.URI(it.substringBefore('#')) }.getOrNull() }
+                .filter { !it.host.isNullOrBlank() && it.port > 0 }
+            if (subs.isNotEmpty()) route.rules.add(0, Rule_DefaultOptions().apply {
+                val hosts = subs.map { it.host.trim('[', ']') }.distinct()
+                val ips = hosts.filter { it.isIpAddress() }
+                val names = hosts.filterNot { it.isIpAddress() }
+                if (ips.isNotEmpty()) ip_cidr = ips.map { if (it.contains(':')) "$it/128" else "$it/32" }
+                if (names.isNotEmpty()) domain = names
+                port = subs.map { it.port }.distinct()
+                outbound = TAG_BYPASS
+            })
+        }.onFailure { Logs.w(it) }
+
+        // Kombain «только заблокированное»: blocked-in-Russia domains and IPs go through the proxy, the rest direct
+        // (the lists are prepared off the main thread when the mode is switched on; buildConfig runs on it)
+        val kbBlockedOnly = !forTest && io.nekohasekai.sagernet.kombain.BlockedLists.enabled &&
+                io.nekohasekai.sagernet.kombain.BlockedLists.ready().also { ok ->
+                    if (!ok) {
+                        Logs.w("[Kombain] списки блокировок ещё не готовы — пока весь трафик через VPN")
+                        io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher {
+                            runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.ensure() }.onFailure { Logs.w(it) }
+                        }
+                    }
+                }
+        if (kbBlockedOnly) {
+            val bl = io.nekohasekai.sagernet.kombain.BlockedLists
+            if (route.rule_set == null) route.rule_set = mutableListOf()
+            route.rule_set.add(RuleSet().apply {
+                type = "local"; tag = bl.TAG_DOMAINS; format = "binary"; path = bl.domainsFile().absolutePath
+            })
+            route.rule_set.add(RuleSet().apply {
+                type = "local"; tag = bl.TAG_IPS; format = "binary"; path = bl.ipsFile().absolutePath
+            })
+            route.rules.add(Rule_DefaultOptions().apply {
+                rule_set = listOf(bl.TAG_DOMAINS, bl.TAG_IPS)
+                outbound = TAG_PROXY
+            })
+            route.final_ = TAG_BYPASS
+        }
+
         // 对 rule_set tag 去重
         if (route.rule_set != null) {
             route.rule_set = route.rule_set.distinctBy { it.tag }
@@ -680,6 +725,15 @@ fun buildConfig(
             userDNSRuleList.forEach {
                 if (!it.checkEmpty()) dns.rules.add(it)
             }
+        }
+
+        // Kombain «только заблокированное»: only blocked domains are resolved through the tunnel
+        if (kbBlockedOnly) {
+            dns.rules.add(DNSRule_DefaultOptions().apply {
+                rule_set = listOf(io.nekohasekai.sagernet.kombain.BlockedLists.TAG_DOMAINS)
+                server = "dns-remote"
+            })
+            dns.final_ = "dns-direct"
         }
 
         if (forTest) {

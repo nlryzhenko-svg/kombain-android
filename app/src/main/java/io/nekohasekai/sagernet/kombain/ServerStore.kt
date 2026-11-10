@@ -29,6 +29,8 @@ data class ServerNode(
     var exitId: String = "",
     var protocols: String = "vless,hy2",
     var sni: String = "",
+    /** Reality target when a neighbour site was picked ("ip:443"); empty = the site itself */
+    var dest: String = "",
     var vpnPort: Int = 443,
     var hyPort: Int = 443,
     var xhPort: Int = 8443,
@@ -46,7 +48,7 @@ data class ServerNode(
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
         put("password", password); put("privateKey", privateKey); put("role", role); put("exitId", exitId)
-        put("protocols", protocols); put("sni", sni); put("vpnPort", vpnPort); put("hyPort", hyPort)
+        put("protocols", protocols); put("sni", sni); put("dest", dest); put("vpnPort", vpnPort); put("hyPort", hyPort)
         put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
@@ -58,7 +60,7 @@ data class ServerNode(
             sshPort = o.optInt("sshPort", 22), user = o.optString("user", "root"),
             password = o.optString("password"), privateKey = o.optString("privateKey"),
             role = o.optString("role", "single"), exitId = o.optString("exitId"),
-            protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"),
+            protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"), dest = o.optString("dest"),
             vpnPort = o.optInt("vpnPort", 443), hyPort = o.optInt("hyPort", 443),
             xhPort = o.optInt("xhPort", 8443), tuicPort = o.optInt("tuicPort", 8443),
             tgPort = o.optInt("tgPort", 9443),

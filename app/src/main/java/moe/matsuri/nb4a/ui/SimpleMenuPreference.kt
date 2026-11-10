@@ -67,12 +67,19 @@ open class SimpleMenuPreference
         ArrayAdapter<CharSequence?>(context, resource) {
 
         var currentPosition = -1
+        private var defaultText: android.content.res.ColorStateList? = null
 
         override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view: View = super.getDropDownView(position, convertView, parent)
+            val tv = view as? android.widget.TextView
+            if (tv != null && defaultText == null) defaultText = tv.textColors
             if (position == currentPosition) {
-                view.setBackgroundColor(context.getColorAttr(R.attr.colorMaterial100))
+                // Kombain: a soft accent tint with accent text — readable in the dark and the light theme
+                val accent = ContextCompat.getColor(context, R.color.kombain_accent)
+                view.setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x33))
+                tv?.setTextColor(accent)
             } else {
+                defaultText?.let { tv?.setTextColor(it) }
                 view.setBackgroundColor(
                     ContextCompat.getColor(
                         context,

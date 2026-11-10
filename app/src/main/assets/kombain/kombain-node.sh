@@ -14,6 +14,9 @@
 #                          new Reality keys, paths, passwords and user ids (old links stop working)
 #   kombain-node.sh set-exit --exit-link vless://...   (entry node: point to a new exit)
 #   kombain-node.sh enable-telegram [--tg-port N] | disable-telegram
+#   kombain-node.sh find-sni [--host IP]     sites next to the server that suit Reality (KB_SNI <base64 JSON>)
+#   kombain-node.sh set-sni --sni DOMAIN [--dest IP:443]   switch the masking site, keys stay
+#   kombain-node.sh ensure-sub                subscription links for every user (HTTPS, pinned self-signed cert)
 #   kombain-node.sh uninstall
 #
 # Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody).
@@ -27,7 +30,8 @@
 #   KB_STEP <text>     progress line
 #   KB_ERROR <text>    fatal error
 #   KB_RESULT <base64 JSON>  {"links":[{"user":..,"proto":..,"link":..}], "bridge": "vless://...",
-#                             "telegram": "tg://proxy?...", "info": {name, protocols, sni, ports}}
+#                             "telegram": "tg://proxy?...", "subs": [{"user":..,"url":..}], "info": {...}}
+#   KB_SNI <base64 JSON>     [{"domain":..,"dest":"ip:443","ms":..}] best first
 #   KB_STATS  <base64 JSON>  see cmd_stats
 set -euo pipefail
 
@@ -61,13 +65,13 @@ load_state() {
   # shellcheck disable=SC1090
   . "$(state_file)"
   XH_PORT=${XH_PORT:-8443}; TUIC_PORT=${TUIC_PORT:-8443}; XH_PATH=${XH_PATH:-/$(rand_hex 6)}
-  TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}
+  TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}; DEST=${DEST:-}; SUB_PORT=${SUB_PORT:-}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -179,8 +183,18 @@ gen_keys() {
 # FakeTLS secret: "ee" + 16 random bytes + the masking domain (Telegram sends it as SNI)
 new_tg_secret() { TG_SECRET=ee$(rand_hex 16)$(hex_str "$SNI"); }
 
-new_user_line() { # name -> "name|uuid|hypass"
-  printf '%s|%s|%s\n' "$1" "$("$KB_BIN/kombain-xray" uuid)" "$(rand_hex 16)"
+new_user_line() { # name [token] -> "name|uuid|hypass|token" (the token keeps the subscription link stable)
+  printf '%s|%s|%s|%s\n' "$1" "$("$KB_BIN/kombain-xray" uuid)" "$(rand_hex 16)" "${2:-$(rand_hex 16)}"
+}
+
+# users added before subscriptions existed get a token
+ensure_tokens() {
+  local tmp; tmp=$(mktemp)
+  while IFS='|' read -r name uuid hypass token; do
+    [ -n "$uuid" ] || continue
+    printf '%s|%s|%s|%s\n' "$name" "$uuid" "$hypass" "${token:-$(rand_hex 16)}"
+  done < "$(users_file)" > "$tmp"
+  cat "$tmp" > "$(users_file)"; rm -f "$tmp"
 }
 
 parse_exit_link() { # vless://uuid@host:port?query#name
@@ -214,7 +228,7 @@ render_xray() {
   local ru_rules="" outbound_main="direct" extra_out="" socks_in="" xh_in="" vless_in="" freedom_settings=""
   [ "$KB_TEST" = 1 ] && freedom_settings=', "settings": {"finalRules": [{"action": "allow"}]}'
   local reality; reality=$(printf '"security":"reality","realitySettings":{"target":"%s","serverNames":["%s"],"privateKey":"%s","shortIds":["%s"]}' \
-    "${KB_REALITY_TARGET:-$SNI:443}" "$SNI" "$PRIV" "$SID")
+    "${KB_REALITY_TARGET:-${DEST:-$SNI:443}}" "$SNI" "$PRIV" "$SID")
   local sniff='"sniffing":{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":true}'
   # the main VLESS inbound always exists: entry nodes and the bridge use it
   vless_in=$(printf '{"tag":"vless-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"none"},"streamSettings":{"network":"raw",%s},%s}' \
@@ -402,15 +416,34 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 EOF
   fi
+  if [ -n "$SUB_PORT" ]; then
+    cat > /etc/systemd/system/kombain-sub.service <<EOF
+[Unit]
+Description=Kombain subscription (HTTPS)
+After=network-online.target
+[Service]
+WorkingDirectory=$KB_DIR/sub
+ExecStart=$(command -v openssl) s_server -quiet -accept $SUB_PORT -cert $KB_DIR/sub.crt -key $KB_DIR/sub.key -WWW
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
   systemctl daemon-reload
 }
 
-svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; has_proto tg && echo mtg; return 0; }
+svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; has_proto tg && echo mtg; [ -n "$SUB_PORT" ] && echo sub; return 0; }
 
-svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; esac; }
+svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; sub) echo Подписка ;; esac; }
 
 restart_services() {
   [ "$KB_SYSTEMD" = 1 ] || return 0
+  open_firewall
   step "Запускаю службы"
   local s
   for s in $(svc_list); do
@@ -422,7 +455,7 @@ restart_services() {
     systemctl is-active --quiet "kombain-$s" || die "$(svc_title "$s") не запустился: $(journalctl -u "kombain-$s" -n 5 --no-pager | tail -3 | tr '\n' ' ')"
   done
   # services of protocols that were switched off
-  for s in hysteria tuic mtg; do
+  for s in hysteria tuic mtg sub; do
     svc_list | grep -qx "$s" || systemctl disable --now "kombain-$s" >/dev/null 2>&1 || true
   done
   return 0
@@ -437,6 +470,7 @@ open_firewall() {
     has_proto hy2 && ufw allow "$HY_PORT/udp" >/dev/null
     has_proto tuic && ufw allow "$TUIC_PORT/udp" >/dev/null
     has_proto tg && ufw allow "$TG_PORT/tcp" >/dev/null
+    [ -n "$SUB_PORT" ] && ufw allow "$SUB_PORT/tcp" >/dev/null
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
     step "Открываю порты в firewalld"
     firewall-cmd -q --permanent --add-port="$PORT/tcp"
@@ -444,6 +478,7 @@ open_firewall() {
     has_proto hy2 && firewall-cmd -q --permanent --add-port="$HY_PORT/udp"
     has_proto tuic && firewall-cmd -q --permanent --add-port="$TUIC_PORT/udp"
     has_proto tg && firewall-cmd -q --permanent --add-port="$TG_PORT/tcp"
+    [ -n "$SUB_PORT" ] && firewall-cmd -q --permanent --add-port="$SUB_PORT/tcp"
     firewall-cmd -q --reload
   fi
   return 0
@@ -462,36 +497,46 @@ enable_bbr() {
 
 host_for_link() { [[ $HOST == *:* ]] && echo "[$HOST]" || echo "$HOST"; }
 
-print_result() {
-  local h links="" first=1 label
+user_links() { # name uuid hypass index -> "proto link" lines
+  local name=$1 uuid=$2 hypass=$3 i=$4 h label
   h=$(host_for_link)
+  if has_proto vless; then
+    label=$(urlenc "$NAME · $name · VLESS")
+    echo "vless vless://$uuid@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=tcp#$label"
+  fi
+  if has_proto xhttp; then
+    label=$(urlenc "$NAME · $name · XHTTP")
+    echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=auto#$label"
+  fi
+  if has_proto tuic; then
+    label=$(urlenc "$NAME · $name · TUIC")
+    echo "tuic tuic://$uuid:$hypass@$h:$TUIC_PORT?sni=$SNI&alpn=h3&congestion_control=bbr&udp_relay_mode=native&allow_insecure=1#$label"
+  fi
+  if has_proto hy2; then
+    label=$(urlenc "$NAME · $name · Hysteria2")
+    echo "hy2 hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS#$label"
+  fi
+  return 0
+}
+
+sub_pin() { openssl x509 -in "$KB_DIR/sub.crt" -outform DER 2>/dev/null | openssl dgst -sha256 -r | cut -d' ' -f1; }
+
+print_result() {
+  local h links="" first=1 subs="" sfirst=1 pin=""
+  h=$(host_for_link)
+  [ -n "$SUB_PORT" ] && [ -f "$KB_DIR/sub.crt" ] && pin=$(sub_pin)
   local i=0
-  while IFS='|' read -r name uuid hypass; do
+  while IFS='|' read -r name uuid hypass token; do
     [ -n "$uuid" ] || continue
     i=$((i + 1))  # same numbering as render_hysteria
-    if has_proto vless; then
-      label=$(urlenc "$NAME · $name · VLESS")
-      local l="vless://$uuid@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=tcp#$label"
+    local proto link
+    while read -r proto link; do
       [ $first = 1 ] || links+=","; first=0
-      links+=$(printf '{"user":"%s","proto":"vless","link":"%s"}' "$name" "$l")
-    fi
-    if has_proto xhttp; then
-      label=$(urlenc "$NAME · $name · XHTTP")
-      local l="vless://$uuid@$h:$XH_PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=auto#$label"
-      [ $first = 1 ] || links+=","; first=0
-      links+=$(printf '{"user":"%s","proto":"xhttp","link":"%s"}' "$name" "$l")
-    fi
-    if has_proto tuic; then
-      label=$(urlenc "$NAME · $name · TUIC")
-      local l="tuic://$uuid:$hypass@$h:$TUIC_PORT?sni=$SNI&alpn=h3&congestion_control=bbr&udp_relay_mode=native&allow_insecure=1#$label"
-      [ $first = 1 ] || links+=","; first=0
-      links+=$(printf '{"user":"%s","proto":"tuic","link":"%s"}' "$name" "$l")
-    fi
-    if has_proto hy2; then
-      label=$(urlenc "$NAME · $name · Hysteria2")
-      local l="hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS#$label"
-      [ $first = 1 ] || links+=","; first=0
-      links+=$(printf '{"user":"%s","proto":"hy2","link":"%s"}' "$name" "$l")
+      links+=$(printf '{"user":"%s","proto":"%s","link":"%s"}' "$name" "$proto" "$link")
+    done < <(user_links "$name" "$uuid" "$hypass" "$i")
+    if [ -n "$pin" ] && [ -n "$token" ]; then
+      [ $sfirst = 1 ] || subs+=","; sfirst=0
+      subs+=$(printf '{"user":"%s","url":"https://%s:%s/%s#kbpin=%s"}' "$name" "$h" "$SUB_PORT" "$token" "$pin")
     fi
   done < "$(users_file)"
   local bridge=""
@@ -500,15 +545,35 @@ print_result() {
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s}' \
-    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT")
-  local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$info")
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s}' \
+    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}")
+  local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
 
 # ---------------------------------------------------------------------------- commands
 
-render_all() { render_xray; render_hysteria; render_tuic; render_mtg; write_units; }
+# Subscription: one file per user named by its random token, served over HTTPS by `openssl s_server -WWW`
+# (no extra software). The certificate is self-signed; Kombain pins its SHA-256 (#kbpin= in the link).
+render_sub() {
+  [ -n "$SUB_PORT" ] || return 0
+  ensure_tokens
+  if [ ! -f "$KB_DIR/sub.crt" ]; then
+    openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 3650 \
+      -keyout "$KB_DIR/sub.key" -out "$KB_DIR/sub.crt" -subj "/CN=$SNI" >/dev/null 2>&1
+    chmod 600 "$KB_DIR/sub.key"
+  fi
+  local d="$KB_DIR/sub" i=0
+  # keep the directory itself: it is the running server's working directory
+  mkdir -p "$d"; chmod 700 "$d"; find "$d" -mindepth 1 -delete
+  while IFS='|' read -r name uuid hypass token; do
+    [ -n "$uuid" ] && [ -n "$token" ] || continue
+    i=$((i + 1))
+    user_links "$name" "$uuid" "$hypass" "$i" | cut -d' ' -f2- > "$d/$token"
+  done < "$(users_file)"
+}
+
+render_all() { render_xray; render_hysteria; render_tuic; render_mtg; render_sub; write_units; }
 
 check_ports() {
   [ "$PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты VLESS и XHTTP должны различаться"
@@ -522,7 +587,7 @@ check_ports() {
 
 cmd_install() {
   ROLE=single; HOST=""; PROTOCOLS="vless,xhttp,hy2"; SNI="www.microsoft.com"; PORT=443; HY_PORT=443
-  XH_PORT=8443; TUIC_PORT=8443; TG_PORT=9443; TG_SECRET=""
+  XH_PORT=8443; TUIC_PORT=8443; TG_PORT=9443; TG_SECRET=""; DEST=""; SUB_PORT=$((20000 + RANDOM % 40000))
   NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link=""
   while [ $# -gt 0 ]; do
     case $1 in
@@ -535,6 +600,8 @@ cmd_install() {
       --hy-port) HY_PORT=$2; shift 2 ;;
       --tuic-port) TUIC_PORT=$2; shift 2 ;;
       --tg-port) TG_PORT=$2; shift 2 ;;
+      --dest) DEST=$2; shift 2 ;;
+      --sub-port) SUB_PORT=$2; shift 2 ;;
       --name) NAME=$2; shift 2 ;;
       --user) first_user=$2; shift 2 ;;
       --bridge) bridge=1; shift ;;
@@ -557,6 +624,7 @@ cmd_install() {
   gen_keys
   [ $bridge = 1 ] && BRIDGE_UUID=$("$KB_BIN/kombain-xray" uuid) || BRIDGE_UUID=""
   new_user_line "$first_user" > "$(users_file)"; chmod 600 "$(users_file)"
+  rm -f "$KB_DIR/sub.crt" "$KB_DIR/sub.key"
   save_state
   step "Пишу конфиги"
   render_all
@@ -644,7 +712,8 @@ cmd_rotate() {
       --hy-port) HY_PORT=$2; shift 2 ;;
       --tuic-port) TUIC_PORT=$2; shift 2 ;;
       --tg-port) TG_PORT=$2; shift 2 ;;
-      --sni) SNI=$2; shift 2 ;;
+      --sni) SNI=$2; DEST=""; shift 2 ;;
+      --dest) DEST=$2; shift 2 ;;
       *) die "неизвестный параметр $1" ;;
     esac
   done
@@ -653,8 +722,8 @@ cmd_rotate() {
   [ -n "${BRIDGE_UUID-}" ] && BRIDGE_UUID=$("$KB_BIN/kombain-xray" uuid)
   step "Выдаю пользователям новые ключи"
   local tmp; tmp=$(mktemp)
-  while IFS='|' read -r name _; do
-    [ -n "$name" ] && new_user_line "$name"
+  while IFS='|' read -r name _ _ token; do
+    [ -n "$name" ] && new_user_line "$name" "$token"
   done < "$(users_file)" > "$tmp"
   cat "$tmp" > "$(users_file)"; rm -f "$tmp"
   rm -f "$KB_DIR/hy.crt" "$KB_DIR/hy.key"
@@ -705,12 +774,97 @@ cmd_disable_telegram() {
   print_result
 }
 
+# One TLS probe: prints "ip domain ms" when the address serves TLS 1.3 + h2 with a valid
+# certificate for a real domain — what Reality needs from its masking site.
+probe_site() {
+  local ip=$1 out cn domain t0 t1
+  out=$(timeout 4 openssl s_client -connect "$ip:443" -noservername -tls1_3 -alpn h2 </dev/null 2>/dev/null) || return 0
+  echo "$out" | grep -q "ALPN protocol: h2" || return 0
+  cn=$(echo "$out" | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+  domain=${cn#\*.}
+  case $domain in ""|*" "*|localhost|*.local|*.lan|*.internal|*[!a-zA-Z0-9.-]*) return 0 ;; esac
+  [[ $domain == *.* ]] || return 0
+  # the same address must present a trusted certificate for that name
+  t0=$(date +%s%N)
+  out=$(timeout 4 openssl s_client -connect "$ip:443" -servername "$domain" -tls1_3 -alpn h2 -verify_return_error </dev/null 2>/dev/null) || return 0
+  t1=$(date +%s%N)
+  echo "$out" | grep -q "Verify return code: 0" || return 0
+  echo "$ip $domain $(( (t1 - t0) / 1000000 ))"
+}
+
+cmd_find_sni() {
+  local ip="" net
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --host) ip=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  [ -n "$ip" ] && ! [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && ip=$(getent ahostsv4 "$ip" 2>/dev/null | awk 'NR==1 {print $1}')
+  [ -n "$ip" ] || ip=$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
+  [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "не удалось узнать IPv4-адрес сервера"
+  net=${ip%.*}
+  [ "$KB_TEST" = 1 ] && [ -n "${KB_SCAN_NET:-}" ] && net=$KB_SCAN_NET
+  step "Проверяю соседние адреса $net.1–254 (до минуты)"
+  local tmp; tmp=$(mktemp)
+  export -f probe_site
+  seq 1 254 | grep -vx "${ip##*.}" | xargs -P 48 -I{} bash -c 'probe_site "$1"' _ "$net.{}" > "$tmp" 2>/dev/null || true
+  local json="" first=1 n=0 a d ms
+  while read -r a d ms; do
+    [ -n "$d" ] || continue
+    [ $first = 1 ] || json+=","; first=0
+    json+=$(printf '{"domain":"%s","dest":"%s:443","ms":%s}' "$d" "$a" "$ms")
+    n=$((n + 1)); [ $n -ge 10 ] && break
+  done < <(sort -k2,2 -u "$tmp" | sort -k3,3n)
+  rm -f "$tmp"
+  if [ $n = 0 ]; then step "Рядом подходящих сайтов не нашлось"; else step "Подходящих сайтов: $n"; fi
+  echo "KB_SNI $(printf '[%s]' "$json" | base64 | tr -d '\n')"
+}
+
+cmd_set_sni() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local sni="" dest=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --sni) sni=$2; shift 2 ;;
+      --dest) dest=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  [ -n "$sni" ] || die "укажите --sni"
+  SNI=$sni; DEST=$dest
+  # the Telegram secret and the self-signed certificates carry the site name
+  has_proto tg && new_tg_secret
+  rm -f "$KB_DIR/hy.crt" "$KB_DIR/hy.key"
+  save_state
+  step "Маскировка: $SNI${DEST:+ ($DEST)}"
+  render_all; restart_services
+  step "Сайт для маскировки сменён — ключи прежние, в ссылках новый сайт"
+  print_result
+}
+
+cmd_ensure_sub() {
+  load_state
+  if [ -z "$SUB_PORT" ]; then
+    [ "$KB_SYSTEMD" = 1 ] && need_root
+    SUB_PORT=$((20000 + RANDOM % 40000))
+    save_state
+    step "Включаю ссылки-подписки"
+    render_all; restart_services
+  elif [ ! -d "$KB_DIR/sub" ]; then
+    render_sub
+  fi
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   if [ "$KB_SYSTEMD" = 1 ]; then
-    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg >/dev/null 2>&1 || true
+    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg kombain-sub >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-xray.service /etc/systemd/system/kombain-hysteria.service \
-      /etc/systemd/system/kombain-tuic.service /etc/systemd/system/kombain-mtg.service /etc/sysctl.d/99-kombain.conf
+      /etc/systemd/system/kombain-tuic.service /etc/systemd/system/kombain-mtg.service \
+      /etc/systemd/system/kombain-sub.service /etc/sysctl.d/99-kombain.conf
     systemctl daemon-reload
   fi
   rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg"
@@ -728,6 +882,9 @@ case ${1-} in
   set-exit) shift; cmd_set_exit "$@" ;;
   enable-telegram) shift; cmd_enable_telegram "$@" ;;
   disable-telegram) cmd_disable_telegram ;;
+  find-sni) shift; cmd_find_sni "$@" ;;
+  set-sni) shift; cmd_set_sni "$@" ;;
+  ensure-sub) cmd_ensure_sub ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | uninstall" ;;
 esac

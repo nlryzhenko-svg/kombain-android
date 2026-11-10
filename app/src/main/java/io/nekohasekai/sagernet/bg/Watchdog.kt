@@ -144,6 +144,16 @@ object Watchdog {
         val current = SagerDatabase.proxyDao.getById(currentId)
         val name = current?.displayName() ?: "?"
 
+        // own server with a subscription: the keys may have been changed from another device — fetch them first
+        val group = current?.let { SagerDatabase.groupDao.getById(it.groupId) }
+        val sub = group?.subscription
+        if (sub != null && sub.link.orEmpty().contains("#kbpin=") &&
+            System.currentTimeMillis() / 1000 - (sub.lastUpdated ?: 0) > 300
+        ) {
+            log("обновляю подписку «${group.displayName()}» — вдруг ключи сменили")
+            runCatching { io.nekohasekai.sagernet.group.GroupUpdater.executeUpdate(group, false) }.onFailure { Logs.w(it) }
+        }
+
         var message = app.getString(R.string.kb_wd_reconnect, name)
         if (DataStore.kbAutoServer) {
             val others = AutoPick.groupOf(currentId).filter { it.id != currentId }

@@ -240,6 +240,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         // ids keep the actions stable when the Telegram item is absent
         val entries = listOfNotNull(
             tgItem?.let { 4 to it },
+            5 to getString(R.string.srv_m_sni),
             0 to getString(R.string.srv_m_rotate), 1 to getString(R.string.srv_m_ports),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
         )
@@ -248,6 +249,20 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .setTitle(s.name)
             .setItems(items) { _, pos ->
                 when (entries[pos].first) {
+                    5 -> {
+                        Deployer.findSites(s) { sites ->
+                            if (!isAdded) return@findSites
+                            SitePicker.show(requireContext(), sites, s.sni) { domain, dest ->
+                                MaterialAlertDialogBuilder(requireContext())
+                                    .setTitle(R.string.srv_m_sni)
+                                    .setMessage(getString(R.string.srv_sni_apply_msg, domain))
+                                    .setPositiveButton(R.string.srv_sni_apply) { _, _ -> Deployer.setSite(s, domain, dest); scrollTop() }
+                                    .setNegativeButton(android.R.string.cancel, null)
+                                    .show()
+                            }
+                        }
+                        scrollTop()
+                    }
                     4 -> if (s.hasTelegram) MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_tg_off)
                         .setMessage(getString(R.string.srv_tg_off_msg, s.name))

@@ -36,12 +36,50 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
         }
         applyMode(view)
 
+        for (form in listOf(main, entry)) form.findViewById<View>(R.id.f_sni_pick).setOnClickListener { pickSite(form) }
         val tg = view.findViewById<CheckBox>(R.id.p_tg)
         tg.setOnCheckedChangeListener { _, on -> view.findViewById<View>(R.id.port_tg_box).isVisible = on }
         view.findViewById<View>(R.id.btn_install).setOnClickListener { install(view) }
     }
 
     private fun View.f(id: Int) = findViewById<EditText>(id)
+
+    /** form → (domain, neighbour address) picked with «Подобрать» */
+    private val picked = HashMap<Int, Pair<String, String>>()
+
+    private fun pickSite(form: View) {
+        val host = form.f(R.id.f_host).text.toString().trim()
+        val pass = form.f(R.id.f_pass).text.toString()
+        val key = form.f(R.id.f_key).text.toString().trim()
+        if (host.isEmpty() || (pass.isEmpty() && key.isEmpty())) {
+            snackbar(R.string.srv_sni_need).show(); return
+        }
+        val node = ServerNode(
+            host = host, sshPort = form.f(R.id.f_port).text.toString().toIntOrNull() ?: 22,
+            user = form.f(R.id.f_user).text.toString().trim().ifEmpty { "root" }, password = pass, privateKey = key,
+        )
+        val wait = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setMessage(R.string.srv_sni_searching)
+            .setCancelable(false)
+            .show()
+        val log = StringBuilder()
+        io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher {
+            val r = io.nekohasekai.sagernet.kombain.SshRunner(node) { synchronized(log) { log.appendLine(it) } }
+                .run(listOf("find-sni", "--host", host))
+            io.nekohasekai.sagernet.ktx.onMainDispatcher {
+                wait.dismiss()
+                if (!isAdded) return@onMainDispatcher
+                if (r.sites == null) {
+                    snackbar(r.error ?: getString(R.string.srv_log_fail)).show()
+                    return@onMainDispatcher
+                }
+                SitePicker.show(requireContext(), r.sites, form.f(R.id.f_sni).text.toString()) { domain, dest ->
+                    form.f(R.id.f_sni).setText(domain)
+                    picked[form.id] = domain to dest
+                }
+            }
+        }
+    }
 
     private fun applyMode(view: View) {
         view.findViewById<TextView>(R.id.mode_hint).setText(
@@ -71,6 +109,7 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
             form.f(R.id.f_sni).error = getString(R.string.srv_err_sni); return null
         }
         return ServerNode(
+            dest = picked[form.id]?.takeIf { it.first == sni }?.second.orEmpty(),
             name = form.f(R.id.f_name).text.toString().trim().ifEmpty { defaultName }.replace("|", ""),
             host = host, sshPort = port,
             user = form.f(R.id.f_user).text.toString().trim().ifEmpty { "root" },
