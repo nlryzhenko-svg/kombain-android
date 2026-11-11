@@ -217,9 +217,11 @@ gen_vlessenc() {
   [ -n "$XH_DEC" ] && [ -n "$XH_ENC" ] || die "Xray-core на сервере не умеет VLESS Encryption"
 }
 
-cert_sha() { # target host:port, servername -> sha256 of the certificate it presents
-  timeout 5 openssl s_client -connect "$1" -servername "$2" -tls1_3 </dev/null 2>/dev/null \
-    | openssl x509 -outform DER 2>/dev/null | openssl dgst -sha256 -r 2>/dev/null | cut -d' ' -f1
+cert_sha() { # target host:port, servername -> sha256 of the certificate it presents ("" on any failure)
+  local pem
+  pem=$(timeout 6 openssl s_client -connect "$1" -servername "$2" </dev/null 2>/dev/null | openssl x509 2>/dev/null || true)
+  [ -n "$pem" ] || return 0
+  { printf '%s\n' "$pem" | openssl x509 -outform DER 2>/dev/null | openssl dgst -sha256 -r 2>/dev/null | cut -d' ' -f1; } || true
 }
 
 # Other names of the masking site served by the same address with the same certificate:
@@ -229,8 +231,10 @@ find_sni_alts() {
   local target=${KB_REALITY_TARGET:-${DEST:-$SNI:443}} main names n=0 tries=0 c
   main=$(cert_sha "$target" "$SNI")
   [ -n "$main" ] || { step "Не удалось проверить сертификат $SNI — чередование выключено"; return 0; }
-  names=$(timeout 5 openssl s_client -connect "$target" -servername "$SNI" -tls1_3 </dev/null 2>/dev/null \
-    | openssl x509 -noout -ext subjectAltName 2>/dev/null | tr ',' '\n' | sed -n 's/^ *DNS://p')
+  # -text instead of -ext subjectAltName: works with older OpenSSL too
+  names=$({ timeout 6 openssl s_client -connect "$target" -servername "$SNI" </dev/null 2>/dev/null \
+    | openssl x509 -noout -text 2>/dev/null | grep -A1 'Subject Alternative Name' | tail -1 \
+    | tr ',' '\n' | sed -n 's/^ *DNS://p'; } || true)
   for c in $names; do
     case $c in "$SNI"|*'*'*|*[!a-zA-Z0-9.-]*) continue ;; esac
     [[ $c == *.* ]] || continue
@@ -1048,7 +1052,7 @@ busy_ports() {
     ss -Htuln 2>/dev/null | awk '{n=split($5,a,":"); print a[n]}'
   else
     local h
-    for h in $(awk 'NR>1 {split($2,a,":"); print a[2]}' /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 2>/dev/null); do
+    for h in $(awk 'NR>1 {split($2,a,":"); print a[2]}' /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 2>/dev/null || true); do
       echo $((16#$h))
     done
   fi
