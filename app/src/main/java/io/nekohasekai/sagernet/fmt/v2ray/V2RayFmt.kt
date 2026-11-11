@@ -234,9 +234,19 @@ fun StandardV2RayBean.parseDuckSoft(url: HttpUrl) {
             url.queryParameter("host")?.let { host = it }
             url.queryParameter("path")?.let { path = it }
             xhttpMode = url.queryParameter("mode").orEmpty()
+            xhttpExtra = url.queryParameter("extra").orEmpty()
             xrayEngine = true
         }
     }
+
+    // Kombain: VLESS Encryption (Xray only) and the other names of the masking site
+    if (isVLESS) {
+        url.queryParameter("encryption")?.takeIf { it.isNotBlank() && it != "none" }?.let {
+            vlessEncryption = it
+            xrayEngine = true
+        }
+    }
+    url.queryParameter("kbsni")?.let { sniAlts = it }
 
     // maybe from matsuri vmess exoprt
     if (this is VMessBean && !isVLESS) {
@@ -451,7 +461,7 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(isTrojan: Boolean): String {
         .addQueryParameter("type", type)
 
     if (isVLESS) {
-        builder.addQueryParameter("encryption", "none")
+        builder.addQueryParameter("encryption", vlessEncryption.orEmpty().ifBlank { "none" })
         if (encryption != "auto") builder.addQueryParameter("flow", encryption)
     }
 
@@ -487,6 +497,7 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(isTrojan: Boolean): String {
             if (host.isNotBlank()) builder.addQueryParameter("host", host)
             if (path.isNotBlank()) builder.addQueryParameter("path", path)
             if (xhttpMode.orEmpty().isNotBlank()) builder.addQueryParameter("mode", xhttpMode)
+            if (xhttpExtra.orEmpty().isNotBlank()) builder.addQueryParameter("extra", xhttpExtra)
         }
     }
 
@@ -497,6 +508,7 @@ fun StandardV2RayBean.toUriVMessVLESSTrojan(isTrojan: Boolean): String {
                 if (sni.isNotBlank()) {
                     builder.addQueryParameter("sni", sni)
                 }
+                if (sniAlts.orEmpty().isNotBlank()) builder.addQueryParameter("kbsni", sniAlts)
                 if (alpn.isNotBlank()) {
                     builder.addQueryParameter("alpn", alpn.replace("\n", ","))
                 }

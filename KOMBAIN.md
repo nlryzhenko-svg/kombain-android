@@ -120,3 +120,19 @@ Keystore. На сервере: `/etc/kombain`, `/usr/local/bin/kombain-{xray,hys
 Другие команды: `add-user`, `remove-user`, `links`, `stats` (JSON для мониторинга: службы,
 нагрузка, трафик по пользователям через Xray stats API), `rotate [--port …]` (новые ключи,
 пароли и пути; для каскада приложение затем вызывает `set-exit` на входной ноде), `uninstall`.
+
+## Защита от блокировок (с 3.4.0)
+
+Команда сервера `kombain-node.sh harden [--antifreeze on|off] [--fp …] [--sni-rotation on|off] [--hop on|off]`,
+в приложении — «Ещё» у сервера → «Защита от блокировок…». У новых серверов всё включено.
+
+- **Против «заморозки»**: XHTTP-вход получает VLESS Encryption (`xray vlessenc`, X25519) и Vision;
+  в ссылке `mode=stream-one` и `extra={"xmux":{"maxConnections":2}}`.
+- **Отпечаток** (`fp=` в ссылках и в связи каскада), по умолчанию `firefox`.
+- **Чередование имён**: `serverNames` Reality = имя сайта + до двух других имён из его сертификата,
+  которые тот же адрес отдаёт с тем же сертификатом. В ссылке `kbsni=a,b`; Kombain строит для
+  Xray несколько outbound'ов и балансировщик `random`, другие клиенты параметр игнорируют.
+- **Прыжки портов Hysteria2**: диапазон из 1000 UDP-портов перенаправляется на порт Hysteria2
+  (nftables, иначе iptables; служба `kombain-hop`), в ссылке `mport=A-B`.
+- **Белые списки**: `kombain/Whitelist.kt` проверяет IP и сайт маскировки входного сервера
+  по спискам ancored/ru-mobile-whitelist (копия в APK, свежая скачивается раз в 3 дня).

@@ -70,10 +70,17 @@ public abstract class StandardV2RayBean extends AbstractBean {
     public Boolean xrayEngine;
     // Kombain: XHTTP mode (auto / packet-up / stream-up / stream-one)
     public String xhttpMode;
+    // Kombain: VLESS Encryption ("mlkem768x25519plus...", empty = none) — Xray only
+    public String vlessEncryption;
+    // Kombain: XHTTP "extra" JSON (xmux etc.)
+    public String xhttpExtra;
+    // Kombain: other names of the Reality masking site; connections are spread over all of them
+    public String sniAlts;
 
     /** Kombain: XHTTP exists only in Xray, so such profiles always run on the Xray engine. */
     public boolean useXray() {
-        return Boolean.TRUE.equals(xrayEngine) || "xhttp".equals(type) || "splithttp".equals(type);
+        return Boolean.TRUE.equals(xrayEngine) || "xhttp".equals(type) || "splithttp".equals(type)
+                || !JavaUtil.isNullOrBlank(vlessEncryption);
     }
 
     @Override
@@ -120,11 +127,14 @@ public abstract class StandardV2RayBean extends AbstractBean {
         if (muxConcurrency == null) muxConcurrency = 1;
         if (xrayEngine == null) xrayEngine = false;
         if (xhttpMode == null) xhttpMode = "";
+        if (vlessEncryption == null) vlessEncryption = "";
+        if (xhttpExtra == null) xhttpExtra = "";
+        if (sniAlts == null) sniAlts = "";
     }
 
     @Override
     public void serialize(ByteBufferOutput output) {
-        output.writeInt(6);
+        output.writeInt(7);
         super.serialize(output);
         output.writeString(uuid);
         output.writeString(encryption);
@@ -181,6 +191,9 @@ public abstract class StandardV2RayBean extends AbstractBean {
         output.writeInt(muxConcurrency);
         output.writeBoolean(xrayEngine);
         output.writeString(xhttpMode);
+        output.writeString(vlessEncryption);
+        output.writeString(xhttpExtra);
+        output.writeString(sniAlts);
     }
 
     @Override
@@ -286,6 +299,11 @@ public abstract class StandardV2RayBean extends AbstractBean {
         }
         if (version >= 6) {
             xhttpMode = input.readString();
+        }
+        if (version >= 7) {
+            vlessEncryption = input.readString();
+            xhttpExtra = input.readString();
+            sniAlts = input.readString();
         }
     }
 

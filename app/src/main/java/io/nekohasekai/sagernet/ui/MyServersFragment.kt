@@ -123,8 +123,10 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             })
             inner.addView(TextView(ctx).apply {
                 val protos = s.protocols.split(',').joinToString(" + ") { protoName(it) }
+                val unprotected = !s.antifreeze && !s.sniRotation && s.hyHop.isBlank() && s.fp == "chrome"
                 text = "${s.host} · $protos" +
-                        if (s.autoPorts > 0) "\n" + getString(R.string.srv_auto_ports_on, s.autoPorts) else ""
+                        (if (s.autoPorts > 0) "\n" + getString(R.string.srv_auto_ports_on, s.autoPorts) else "") +
+                        "\n" + if (unprotected) getString(R.string.srv_protect_old) else ProtectionDialog.summary(ctx, s)
                 textSize = 13f
                 setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
             })
@@ -240,6 +242,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         }
         // ids keep the actions stable when the Telegram item is absent
         val entries = listOfNotNull(
+            8 to getString(R.string.srv_m_protect),
             tgItem?.let { 4 to it },
             5 to getString(R.string.srv_m_sni),
             6 to getString(R.string.srv_m_shuffle),
@@ -252,6 +255,10 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .setTitle(s.name)
             .setItems(items) { _, pos ->
                 when (entries[pos].first) {
+                    8 -> ProtectionDialog.show(requireContext(), s) { af, fp, rot, hop ->
+                        Deployer.harden(s, af, fp, rot, hop); scrollTop()
+                    }
+
                     6 -> MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_shuffle)
                         .setMessage(R.string.srv_shuffle_msg)
@@ -274,7 +281,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                     5 -> {
                         Deployer.findSites(s) { sites ->
                             if (!isAdded) return@findSites
-                            SitePicker.show(requireContext(), sites, s.sni) { domain, dest ->
+                            SitePicker.show(requireContext(), sites, s.sni, markWhitelist = s.role == "entry") { domain, dest ->
                                 MaterialAlertDialogBuilder(requireContext())
                                     .setTitle(R.string.srv_m_sni)
                                     .setMessage(getString(R.string.srv_sni_apply_msg, domain))

@@ -26,6 +26,37 @@ object Xray {
 }
 
 fun StandardV2RayBean.buildXrayConfig(port: Int): String {
+    // Kombain: with several names of the masking site, every connection picks one at random,
+    // so the censor doesn't see a burst of handshakes to one name
+    val names = if (security == "tls" && realityPubKey.isNotBlank())
+        sniAlts.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() && it != sni } else emptyList()
+    val outbounds = JSONArray()
+    if (names.isEmpty()) {
+        outbounds.put(xrayOutbound(null).put("tag", "proxy"))
+    } else {
+        (listOf<String?>(null) + names).forEachIndexed { i, n -> outbounds.put(xrayOutbound(n).put("tag", "proxy-$i")) }
+    }
+
+    return JSONObject().apply {
+        put("log", JSONObject().put("loglevel", "warning"))
+        put("inbounds", JSONArray().put(JSONObject().apply {
+            put("tag", "in")
+            put("listen", LOCALHOST)
+            put("port", port)
+            put("protocol", "socks")
+            put("settings", JSONObject().put("udp", true).put("auth", "noauth"))
+        }))
+        put("outbounds", outbounds)
+        if (names.isNotEmpty()) put("routing", JSONObject().apply {
+            put("balancers", JSONArray().put(JSONObject().put("tag", "rot")
+                .put("selector", JSONArray().put("proxy-")).put("strategy", JSONObject().put("type", "random"))))
+            put("rules", JSONArray().put(JSONObject().put("type", "field")
+                .put("inboundTag", JSONArray().put("in")).put("balancerTag", "rot")))
+        })
+    }.toString(2)
+}
+
+private fun StandardV2RayBean.xrayOutbound(serverNameOverride: String?): JSONObject {
     val outbound = JSONObject()
     val address = finalAddress.ifBlank { serverAddress }
     val portOut = if (finalPort > 0) finalPort else serverPort
@@ -39,7 +70,7 @@ fun StandardV2RayBean.buildXrayConfig(port: Int): String {
         }
 
         isVLESS -> {
-            val user = JSONObject().put("id", uuid).put("encryption", "none")
+            val user = JSONObject().put("id", uuid).put("encryption", vlessEncryption.orEmpty().ifBlank { "none" })
             val flow = encryption.orEmpty()
             if (flow.startsWith("xtls-")) user.put("flow", flow)
             outbound.put("protocol", "vless")
@@ -58,23 +89,11 @@ fun StandardV2RayBean.buildXrayConfig(port: Int): String {
             )))
         }
     }
-    outbound.put("tag", "proxy")
-    outbound.put("streamSettings", xrayStreamSettings())
-
-    return JSONObject().apply {
-        put("log", JSONObject().put("loglevel", "warning"))
-        put("inbounds", JSONArray().put(JSONObject().apply {
-            put("tag", "in")
-            put("listen", LOCALHOST)
-            put("port", port)
-            put("protocol", "socks")
-            put("settings", JSONObject().put("udp", true).put("auth", "noauth"))
-        }))
-        put("outbounds", JSONArray().put(outbound))
-    }.toString(2)
+    outbound.put("streamSettings", xrayStreamSettings(serverNameOverride))
+    return outbound
 }
 
-private fun StandardV2RayBean.xrayStreamSettings(): JSONObject {
+private fun StandardV2RayBean.xrayStreamSettings(serverNameOverride: String?): JSONObject {
     val stream = JSONObject()
     val network = when (type) {
         "tcp", "" -> "raw"
@@ -98,11 +117,14 @@ private fun StandardV2RayBean.xrayStreamSettings(): JSONObject {
             if (path.isNotBlank()) put("path", path)
             if (host.isNotBlank()) put("host", host)
             put("mode", xhttpMode.orEmpty().ifBlank { "auto" })
+            xhttpExtra.orEmpty().takeIf { it.isNotBlank() }?.let { e ->
+                runCatching { JSONObject(e) }.getOrNull()?.let { put("extra", it) }
+            }
         })
     }
 
-    val serverName = sni.ifBlank { host.ifBlank { if (serverAddress.any { it.isLetter() }) serverAddress else "" } }
-    val fp = utlsFingerprint.ifBlank { "chrome" }
+    val serverName = serverNameOverride ?: sni.ifBlank { host.ifBlank { if (serverAddress.any { it.isLetter() }) serverAddress else "" } }
+    val fp = utlsFingerprint.ifBlank { "firefox" }
     when {
         security == "tls" && realityPubKey.isNotBlank() -> {
             stream.put("security", "reality")

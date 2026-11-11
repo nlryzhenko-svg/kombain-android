@@ -62,6 +62,8 @@ object Deployer {
         "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
         "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--tg-port", n.tgPort.toString(),
         "--name", n.name.trim(),
+        "--fp", n.fp, "--antifreeze", if (n.antifreeze) "1" else "0",
+        "--sni-rotation", if (n.sniRotation) "1" else "0", "--hop", if (n.hop) "1" else "0",
     ) + (if (n.dest.isNotBlank()) listOf("--dest", n.dest) else emptyList()) + extra
 
     /** Keeps the stored node in step with what the server reports (protocols, ports). */
@@ -74,6 +76,14 @@ object Deployer {
         node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
         node.tgPort = i.optInt("tgPort", node.tgPort)
         node.autoPorts = i.optInt("autoPorts", node.autoPorts)
+        if (i.has("fp")) {
+            node.fp = i.optString("fp", node.fp)
+            node.antifreeze = i.optInt("antifreeze") == 1
+            node.sniRotation = i.optInt("sniRotation") == 1
+            node.sniAlts = i.optString("sniAlts")
+            node.hyHop = i.optString("hyHop")
+            node.hop = node.hyHop.isNotBlank()
+        }
     }
 
     private fun telegramOf(json: JSONObject?) = json?.optString("telegram").orEmpty()
@@ -109,6 +119,8 @@ object Deployer {
             ServerStore.upsert(exit)
 
             emit("── Шаг 2 из 2: входной сервер ${entry.name}")
+            runCatching { Whitelist.describe(Whitelist.check(entry.host, entry.sni)) }.getOrNull()
+                ?.lines()?.forEach { emit(it) }
             entry.role = "entry"
             entry.exitId = exit.id
             val r2 = SshRunner(entry, ::emit).run(installArgs(entry, listOf("--role", "entry", "--exit-link", bridge)))
@@ -305,6 +317,34 @@ object Deployer {
             val n = importLinks(node, groupName(node), r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Порты сменены, профили обновлены ($n). Telegram-прокси не тронут, устройства с подпиской обновятся сами.")
+        }
+    }
+
+    /** Protection against DPI freezes: XHTTP hardening, TLS fingerprint, rotation of site names, port hopping. */
+    fun harden(node: ServerNode, antifreeze: Boolean, fp: String, sniRotation: Boolean, hop: Boolean) {
+        if (!start("Защита от блокировок на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val args = mutableListOf("harden", "--antifreeze", if (antifreeze) "on" else "off", "--fp", fp,
+                "--sni-rotation", if (sniRotation) "on" else "off")
+            if (node.protocols.split(',').contains("hy2")) args += listOf("--hop", if (hop) "on" else "off")
+            val r = SshRunner(node, ::emit).run(args)
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
+            syncInfo(node, r.json)
+            ServerStore.upsert(node)
+            if (node.role == "exit") {
+                // the entry node dials the exit with the exit's fingerprint
+                val bridge = r.json.optString("bridge")
+                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
+                if (entry != null && bridge.isNotBlank()) {
+                    emit("── Обновляю связь входного сервера ${entry.name}")
+                    val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                    if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
+                }
+                return@runOnDefaultDispatcher finish(true, "Защита выходного сервера обновлена, каскад работает.")
+            }
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Защита обновлена, профили обновлены ($n). Устройства с подпиской получат её сами.")
         }
     }
 

@@ -73,7 +73,8 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
                     snackbar(r.error ?: getString(R.string.srv_log_fail)).show()
                     return@onMainDispatcher
                 }
-                SitePicker.show(requireContext(), r.sites, form.f(R.id.f_sni).text.toString()) { domain, dest ->
+                SitePicker.show(requireContext(), r.sites, form.f(R.id.f_sni).text.toString(),
+                    markWhitelist = cascade && form.id == entry.id) { domain, dest ->
                     form.f(R.id.f_sni).setText(domain)
                     picked[form.id] = domain to dest
                 }

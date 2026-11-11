@@ -6,6 +6,7 @@
 #                            [--sni www.microsoft.com] [--port 443] [--xh-port 8443] [--hy-port 443]
 #                            [--tuic-port 8443] [--tg-port 9443] [--name "Мой сервер"] [--user "Телефон"]
 #                            [--bridge] [--exit-link vless://...]
+#                            [--fp firefox] [--antifreeze 1] [--sni-rotation 1] [--hop 1]
 #   kombain-node.sh add-user NAME | remove-user NAME
 #   kombain-node.sh links
 #   kombain-node.sh status            (human readable)
@@ -20,6 +21,13 @@
 #   kombain-node.sh shuffle-ports             random new ports for the VPN protocols; keys, Telegram proxy and
 #                                             the subscription stay as they are
 #   kombain-node.sh auto-ports --every DAYS   shuffle ports on a schedule (0 = off)
+#   kombain-node.sh harden [--antifreeze on|off] [--fp firefox|edge|chrome|safari|ios|android|360|qq|random|randomized]
+#                          [--sni-rotation on|off] [--hop on|off]
+#                          protection against DPI «freezes» (ТСПУ):
+#                            antifreeze   — XHTTP: VLESS Encryption + Vision, stream-one, at most 2 connections (XMUX)
+#                            fp           — browser TLS fingerprint in the links
+#                            sni-rotation — 2–3 names of the masking site; Kombain spreads connections over them
+#                            hop          — Hysteria2 port hopping over a range of 1000 UDP ports
 #   kombain-node.sh uninstall
 #
 # Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody).
@@ -69,12 +77,14 @@ load_state() {
   . "$(state_file)"
   XH_PORT=${XH_PORT:-8443}; TUIC_PORT=${TUIC_PORT:-8443}; XH_PATH=${XH_PATH:-/$(rand_hex 6)}
   TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}; DEST=${DEST:-}; SUB_PORT=${SUB_PORT:-}; AUTO_PORTS=${AUTO_PORTS:-0}
+  FP=${FP:-firefox}; ANTIFREEZE=${ANTIFREEZE:-0}; XH_DEC=${XH_DEC:-}; XH_ENC=${XH_ENC:-}
+  SNI_ROT=${SNI_ROT:-0}; SNI_ALTS=${SNI_ALTS:-}; HY_HOP=${HY_HOP:-}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -181,7 +191,73 @@ gen_keys() {
   HY_OBFS=$(rand_hex 16)
   XH_PATH=/$(rand_hex 6)
   new_tg_secret
+  XH_DEC=""; XH_ENC=""
+  [ "${ANTIFREEZE:-0}" = 1 ] && gen_vlessenc
+  return 0
 }
+
+FPS="firefox edge chrome safari ios android 360 qq random randomized"
+
+# VLESS Encryption key pair (X25519 authentication) for the XHTTP inbound
+gen_vlessenc() {
+  local out
+  out=$("$KB_BIN/kombain-xray" vlessenc 2>/dev/null || true)
+  if [ -z "$out" ] && [ "$KB_DOWNLOAD" = 1 ]; then
+    step "Обновляю Xray-core (нужна версия с VLESS Encryption)"
+    detect_arch
+    local tmp; tmp=$(mktemp -d)
+    curl -fsSL --retry 3 -o "$tmp/xray.zip" "$XRAY_URL_BASE/Xray-linux-$XRAY_ARCH.zip" || die "не удалось скачать Xray"
+    unzip -qo "$tmp/xray.zip" -d "$tmp/xray"
+    install -m 755 "$tmp/xray/xray" "$KB_BIN/kombain-xray"
+    rm -rf "$tmp"
+    out=$("$KB_BIN/kombain-xray" vlessenc 2>/dev/null || true)
+  fi
+  XH_DEC=$(echo "$out" | awk -F'"' '/"decryption"/ {print $4; exit}')
+  XH_ENC=$(echo "$out" | awk -F'"' '/"encryption"/ {print $4; exit}')
+  [ -n "$XH_DEC" ] && [ -n "$XH_ENC" ] || die "Xray-core на сервере не умеет VLESS Encryption"
+}
+
+cert_sha() { # target host:port, servername -> sha256 of the certificate it presents
+  timeout 5 openssl s_client -connect "$1" -servername "$2" -tls1_3 </dev/null 2>/dev/null \
+    | openssl x509 -outform DER 2>/dev/null | openssl dgst -sha256 -r 2>/dev/null | cut -d' ' -f1
+}
+
+# Other names of the masking site served by the same address with the same certificate:
+# Reality accepts all of them, and the app spreads connections over them (no burst to one name).
+find_sni_alts() {
+  SNI_ALTS=""
+  local target=${KB_REALITY_TARGET:-${DEST:-$SNI:443}} main names n=0 tries=0 c
+  main=$(cert_sha "$target" "$SNI")
+  [ -n "$main" ] || { step "Не удалось проверить сертификат $SNI — чередование выключено"; return 0; }
+  names=$(timeout 5 openssl s_client -connect "$target" -servername "$SNI" -tls1_3 </dev/null 2>/dev/null \
+    | openssl x509 -noout -ext subjectAltName 2>/dev/null | tr ',' '\n' | sed -n 's/^ *DNS://p')
+  for c in $names; do
+    case $c in "$SNI"|*'*'*|*[!a-zA-Z0-9.-]*) continue ;; esac
+    [[ $c == *.* ]] || continue
+    tries=$((tries + 1)); [ $tries -gt 12 ] && break
+    [ "$(cert_sha "$target" "$c")" = "$main" ] || continue
+    SNI_ALTS+="${SNI_ALTS:+,}$c"; n=$((n + 1)); [ $n -ge 2 ] && break
+  done
+  if [ $n -gt 0 ]; then step "Чередование имён сайта: $SNI, ${SNI_ALTS//,/, }"
+  else step "У сайта $SNI нет других подходящих имён — чередовать нечего"; fi
+  return 0
+}
+
+# a range of 1000 UDP ports for Hysteria2 port hopping that no other Kombain port falls into
+pick_hop() {
+  local used=" $(busy_ports | tr '\n' ' ') " fixed="$PORT $XH_PORT $TUIC_PORT $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT $HY_PORT" a b i x ok
+  for i in $(seq 1 100); do
+    a=$((20000 + RANDOM % 39000)); b=$((a + 999)); ok=1
+    for x in $fixed $used; do
+      [[ $x =~ ^[0-9]+$ ]] || continue
+      if [ "$x" -ge "$a" ] && [ "$x" -le "$b" ]; then ok=0; break; fi
+    done
+    [ $ok = 1 ] && { echo "$a-$b"; return 0; }
+  done
+  die "не нашёл свободный диапазон портов"
+}
+
+in_hop() { [ -n "${HY_HOP:-}" ] && [ "$1" -ge "${HY_HOP%-*}" ] && [ "$1" -le "${HY_HOP#*-}" ]; }
 
 # FakeTLS secret: "ee" + 16 random bytes + the masking domain (Telegram sends it as SNI)
 new_tg_secret() { TG_SECRET=ee$(rand_hex 16)$(hex_str "$SNI"); }
@@ -230,15 +306,20 @@ json_clients() { # $1 = flow ("" for XHTTP)
 render_xray() {
   local ru_rules="" outbound_main="direct" extra_out="" socks_in="" xh_in="" vless_in="" freedom_settings=""
   [ "$KB_TEST" = 1 ] && freedom_settings=', "settings": {"finalRules": [{"action": "allow"}]}'
-  local reality; reality=$(printf '"security":"reality","realitySettings":{"target":"%s","serverNames":["%s"],"privateKey":"%s","shortIds":["%s"]}' \
-    "${KB_REALITY_TARGET:-${DEST:-$SNI:443}}" "$SNI" "$PRIV" "$SID")
+  local names="\"$SNI\"" a
+  for a in ${SNI_ALTS//,/ }; do names+=",\"$a\""; done
+  local reality; reality=$(printf '"security":"reality","realitySettings":{"target":"%s","serverNames":[%s],"privateKey":"%s","shortIds":["%s"]}' \
+    "${KB_REALITY_TARGET:-${DEST:-$SNI:443}}" "$names" "$PRIV" "$SID")
   local sniff='"sniffing":{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":true}'
   # the main VLESS inbound always exists: entry nodes and the bridge use it
   vless_in=$(printf '{"tag":"vless-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"none"},"streamSettings":{"network":"raw",%s},%s}' \
     "$PORT" "$(json_clients xtls-rprx-vision)" "$reality" "$sniff")
   if has_proto xhttp; then
-    xh_in=$(printf ',{"tag":"xhttp-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"none"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
-      "$XH_PORT" "$(json_clients "")" "$XH_PATH" "$reality" "$sniff")
+    # «против заморозки»: VLESS Encryption + Vision inside XHTTP (the client also uses stream-one and XMUX)
+    local xh_flow="" xh_dec=none
+    if [ "${ANTIFREEZE:-0}" = 1 ] && [ -n "$XH_DEC" ]; then xh_flow=xtls-rprx-vision; xh_dec=$XH_DEC; fi
+    xh_in=$(printf ',{"tag":"xhttp-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
+      "$XH_PORT" "$(json_clients "$xh_flow")" "$xh_dec" "$XH_PATH" "$reality" "$sniff")
   fi
   if has_proto hy2 || has_proto tuic || has_proto tg; then
     socks_in=',{"tag":"hy-in","listen":"127.0.0.1","port":'"$KB_SOCKS_PORT"',"protocol":"socks","settings":{"udp":true}}'
@@ -338,6 +419,85 @@ render_hysteria() {
     echo "      addr: 127.0.0.1:$KB_SOCKS_PORT"
   } > "$KB_DIR/hysteria.yaml"
   chmod 600 "$KB_DIR/hysteria.yaml"
+}
+
+# Hysteria2 port hopping: the UDP range HY_HOP is redirected to HY_PORT (nftables, or iptables)
+render_hop() {
+  local f="$KB_DIR/hop.sh"
+  if [ -z "${HY_HOP:-}" ] || ! has_proto hy2; then rm -f "$f"; return 0; fi
+  local a=${HY_HOP%-*} b=${HY_HOP#*-}
+  if command -v nft >/dev/null; then
+    cat > "$f" <<EOF
+#!/bin/sh
+# Kombain: Hysteria2 port hopping $a-$b/udp -> $HY_PORT
+case \$1 in
+  up) nft -f - <<'NFT'
+table inet kombain_hop
+delete table inet kombain_hop
+table inet kombain_hop {
+  chain pre {
+    type nat hook prerouting priority dstnat; policy accept;
+    udp dport $a-$b redirect to :$HY_PORT
+  }
+}
+NFT
+  ;;
+  down) nft delete table inet kombain_hop 2>/dev/null; true ;;
+esac
+EOF
+  else
+    cat > "$f" <<EOF
+#!/bin/sh
+# Kombain: Hysteria2 port hopping $a-$b/udp -> $HY_PORT
+for t in iptables ip6tables; do
+  command -v \$t >/dev/null || continue
+  \$t -t nat -D PREROUTING -j KOMBAIN_HOP 2>/dev/null
+  \$t -t nat -F KOMBAIN_HOP 2>/dev/null; \$t -t nat -X KOMBAIN_HOP 2>/dev/null
+  [ "\$1" = up ] || continue
+  \$t -t nat -N KOMBAIN_HOP
+  \$t -t nat -A KOMBAIN_HOP -p udp --dport $a:$b -j REDIRECT --to-ports $HY_PORT
+  \$t -t nat -I PREROUTING -j KOMBAIN_HOP
+done
+true
+EOF
+  fi
+  chmod 700 "$f"
+}
+
+apply_hop() {
+  [ "$KB_SYSTEMD" = 1 ] || return 0
+  if [ -f "$KB_DIR/hop.sh" ]; then
+    cat > /etc/systemd/system/kombain-hop.service <<EOF
+[Unit]
+Description=Kombain: Hysteria2 port hopping
+After=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh $KB_DIR/hop.sh up
+ExecStop=/bin/sh $KB_DIR/hop.sh down
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable kombain-hop >/dev/null 2>&1 || true
+    sh "$KB_DIR/hop.sh" up || die "не удалось включить прыжки портов (нет nftables/iptables?)"
+    systemctl restart kombain-hop >/dev/null 2>&1 || true
+  else
+    nft delete table inet kombain_hop 2>/dev/null || true
+    local t
+    for t in iptables ip6tables; do
+      command -v $t >/dev/null || continue
+      $t -t nat -D PREROUTING -j KOMBAIN_HOP 2>/dev/null || true
+      $t -t nat -F KOMBAIN_HOP 2>/dev/null || true; $t -t nat -X KOMBAIN_HOP 2>/dev/null || true
+    done
+    if [ -f /etc/systemd/system/kombain-hop.service ]; then
+      systemctl disable --now kombain-hop >/dev/null 2>&1 || true
+      rm -f /etc/systemd/system/kombain-hop.service
+      systemctl daemon-reload
+    fi
+  fi
+  return 0
 }
 
 render_mtg() {
@@ -448,6 +608,7 @@ restart_services() {
   [ "$KB_SYSTEMD" = 1 ] || return 0
   open_firewall
   step "Запускаю службы"
+  apply_hop
   local s
   for s in $(svc_list); do
     systemctl enable "kombain-$s" >/dev/null 2>&1 || true
@@ -471,6 +632,7 @@ open_firewall() {
     ufw allow "$PORT/tcp" >/dev/null
     has_proto xhttp && ufw allow "$XH_PORT/tcp" >/dev/null
     has_proto hy2 && ufw allow "$HY_PORT/udp" >/dev/null
+    has_proto hy2 && [ -n "${HY_HOP:-}" ] && ufw allow "${HY_HOP/-/:}/udp" >/dev/null
     has_proto tuic && ufw allow "$TUIC_PORT/udp" >/dev/null
     has_proto tg && ufw allow "$TG_PORT/tcp" >/dev/null
     [ -n "$SUB_PORT" ] && ufw allow "$SUB_PORT/tcp" >/dev/null
@@ -479,6 +641,7 @@ open_firewall() {
     firewall-cmd -q --permanent --add-port="$PORT/tcp"
     has_proto xhttp && firewall-cmd -q --permanent --add-port="$XH_PORT/tcp"
     has_proto hy2 && firewall-cmd -q --permanent --add-port="$HY_PORT/udp"
+    has_proto hy2 && [ -n "${HY_HOP:-}" ] && firewall-cmd -q --permanent --add-port="$HY_HOP/udp"
     has_proto tuic && firewall-cmd -q --permanent --add-port="$TUIC_PORT/udp"
     has_proto tg && firewall-cmd -q --permanent --add-port="$TG_PORT/tcp"
     [ -n "$SUB_PORT" ] && firewall-cmd -q --permanent --add-port="$SUB_PORT/tcp"
@@ -501,15 +664,21 @@ enable_bbr() {
 host_for_link() { [[ $HOST == *:* ]] && echo "[$HOST]" || echo "$HOST"; }
 
 user_links() { # name uuid hypass index -> "proto link" lines
-  local name=$1 uuid=$2 hypass=$3 i=$4 h label
+  local name=$1 uuid=$2 hypass=$3 i=$4 h label alts=""
   h=$(host_for_link)
+  # kbsni: other names of the masking site (Kombain spreads connections over them; other apps ignore it)
+  [ -n "${SNI_ALTS:-}" ] && alts="&kbsni=$SNI_ALTS"
   if has_proto vless; then
     label=$(urlenc "$NAME · $name · VLESS")
-    echo "vless vless://$uuid@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=tcp#$label"
+    echo "vless vless://$uuid@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=tcp#$label"
   fi
   if has_proto xhttp; then
     label=$(urlenc "$NAME · $name · XHTTP")
-    echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=none&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=auto#$label"
+    if [ "${ANTIFREEZE:-0}" = 1 ] && [ -n "$XH_ENC" ]; then
+      echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=$(urlenc "$XH_ENC")&flow=xtls-rprx-vision&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=stream-one&extra=$(urlenc '{"xmux":{"maxConnections":2}}')#$label"
+    else
+      echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=none&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=auto#$label"
+    fi
   fi
   if has_proto tuic; then
     label=$(urlenc "$NAME · $name · TUIC")
@@ -517,7 +686,7 @@ user_links() { # name uuid hypass index -> "proto link" lines
   fi
   if has_proto hy2; then
     label=$(urlenc "$NAME · $name · Hysteria2")
-    echo "hy2 hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS#$label"
+    echo "hy2 hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS${HY_HOP:+&mport=$HY_HOP}#$label"
   fi
   return 0
 }
@@ -544,12 +713,13 @@ print_result() {
   done < "$(users_file)"
   local bridge=""
   if [ -n "${BRIDGE_UUID-}" ]; then
-    bridge="vless://$BRIDGE_UUID@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PUB&sid=$SID&type=tcp#bridge"
+    bridge="vless://$BRIDGE_UUID@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=$FP&pbk=$PUB&sid=$SID&type=tcp#bridge"
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s}' \
-    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}")
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s"}' \
+    "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}" \
+    "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
@@ -576,7 +746,7 @@ render_sub() {
   done < "$(users_file)"
 }
 
-render_all() { render_xray; render_hysteria; render_tuic; render_mtg; render_sub; write_units; }
+render_all() { render_xray; render_hysteria; render_hop; render_tuic; render_mtg; render_sub; write_units; }
 
 check_ports() {
   [ "$PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты VLESS и XHTTP должны различаться"
@@ -591,7 +761,8 @@ check_ports() {
 cmd_install() {
   ROLE=single; HOST=""; PROTOCOLS="vless,xhttp,hy2"; SNI="www.microsoft.com"; PORT=443; HY_PORT=443
   XH_PORT=8443; TUIC_PORT=8443; TG_PORT=9443; TG_SECRET=""; DEST=""; SUB_PORT=$((20000 + RANDOM % 40000))
-  NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link=""
+  NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link="" hop=1
+  FP=firefox; ANTIFREEZE=1; SNI_ROT=1; SNI_ALTS=""; HY_HOP=""
   while [ $# -gt 0 ]; do
     case $1 in
       --host) HOST=$2; shift 2 ;;
@@ -609,10 +780,15 @@ cmd_install() {
       --user) first_user=$2; shift 2 ;;
       --bridge) bridge=1; shift ;;
       --exit-link) exit_link=$2; shift 2 ;;
+      --fp) FP=$2; shift 2 ;;
+      --antifreeze) ANTIFREEZE=$2; shift 2 ;;
+      --sni-rotation) SNI_ROT=$2; shift 2 ;;
+      --hop) hop=$2; shift 2 ;;
       *) die "неизвестный параметр $1" ;;
     esac
   done
   [ -n "$HOST" ] || die "не указан --host"
+  case " $FPS " in *" $FP "*) ;; *) die "неизвестный отпечаток $FP" ;; esac
   [ "$ROLE" = single ] || [ "$ROLE" = entry ] || die "роль должна быть single или entry"
   check_ports
   [ "$KB_SYSTEMD" = 1 ] && need_root
@@ -628,6 +804,8 @@ cmd_install() {
   [ $bridge = 1 ] && BRIDGE_UUID=$("$KB_BIN/kombain-xray" uuid) || BRIDGE_UUID=""
   new_user_line "$first_user" > "$(users_file)"; chmod 600 "$(users_file)"
   rm -f "$KB_DIR/sub.crt" "$KB_DIR/sub.key"
+  [ "$SNI_ROT" = 1 ] && find_sni_alts
+  [ "$hop" = 1 ] && has_proto hy2 && HY_HOP=$(pick_hop)
   save_state
   step "Пишу конфиги"
   render_all
@@ -722,6 +900,8 @@ cmd_rotate() {
   done
   check_ports
   gen_keys
+  [ "$SNI_ROT" = 1 ] && find_sni_alts
+  in_hop "$HY_PORT" 2>/dev/null && HY_HOP=$(pick_hop)
   [ -n "${BRIDGE_UUID-}" ] && BRIDGE_UUID=$("$KB_BIN/kombain-xray" uuid)
   step "Выдаю пользователям новые ключи"
   local tmp; tmp=$(mktemp)
@@ -837,6 +1017,7 @@ cmd_set_sni() {
   done
   [ -n "$sni" ] || die "укажите --sni"
   SNI=$sni; DEST=$dest
+  if [ "$SNI_ROT" = 1 ]; then find_sni_alts; else SNI_ALTS=""; fi
   # the Telegram secret and the self-signed certificates carry the site name
   has_proto tg && new_tg_secret
   rm -f "$KB_DIR/hy.crt" "$KB_DIR/hy.key"
@@ -879,6 +1060,7 @@ pick_port() {
   for i in $(seq 1 200); do
     p=$((20000 + RANDOM % 40000))
     case $used in *" $p "*) continue ;; esac
+    in_hop "$p" && continue
     echo "$p"; return 0
   done
   die "не нашёл свободный порт"
@@ -888,7 +1070,7 @@ close_ports() { # "port/proto" ... — remove old firewall openings
   [ "$KB_SYSTEMD" = 1 ] || return 0
   local x
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-    for x in "$@"; do ufw delete allow "$x" >/dev/null 2>&1 || true; done
+    for x in "$@"; do ufw delete allow "${x/-/:}" >/dev/null 2>&1 || true; done
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
     for x in "$@"; do firewall-cmd -q --permanent --remove-port="$x" >/dev/null 2>&1 || true; done
     firewall-cmd -q --reload || true
@@ -912,12 +1094,14 @@ cmd_shuffle_ports() {
   [ -n "$new_xh" ] && XH_PORT=$new_xh
   [ -n "$new_hy" ] && HY_PORT=$new_hy
   [ -n "$new_tuic" ] && TUIC_PORT=$new_tuic
+  if [ -n "$HY_HOP" ] && has_proto hy2; then old+=("$HY_HOP/udp"); HY_HOP=""; HY_HOP=$(pick_hop); fi
   save_state
-  step "Новые порты: VLESS $PORT${new_xh:+, XHTTP $XH_PORT}${new_hy:+, Hysteria2 $HY_PORT}${new_tuic:+, TUIC $TUIC_PORT}"
+  step "Новые порты: VLESS $PORT${new_xh:+, XHTTP $XH_PORT}${new_hy:+, Hysteria2 $HY_PORT}${new_tuic:+, TUIC $TUIC_PORT}${HY_HOP:+, прыжки $HY_HOP}"
   # Telegram proxy and the subscription server keep running untouched
-  render_xray; render_hysteria; render_tuic; render_sub
+  render_xray; render_hysteria; render_hop; render_tuic; render_sub
   if [ "$KB_SYSTEMD" = 1 ]; then
     open_firewall
+    apply_hop
     local s
     for s in xray hysteria tuic; do
       svc_list | grep -qx "$s" || continue
@@ -982,9 +1166,65 @@ EOF
   print_result
 }
 
+cmd_harden() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local af="" fp="" rot="" hop="" old_hop
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --antifreeze) af=$2; shift 2 ;;
+      --fp) fp=$2; shift 2 ;;
+      --sni-rotation) rot=$2; shift 2 ;;
+      --hop) hop=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  onoff() { case $1 in on|1|yes) echo 1 ;; off|0|no) echo 0 ;; *) die "ожидается on или off" ;; esac; }
+  old_hop=$HY_HOP
+  if [ -n "$fp" ]; then
+    case " $FPS " in *" $fp "*) FP=$fp ;; *) die "неизвестный отпечаток $fp (есть: $FPS)" ;; esac
+  fi
+  if [ -n "$af" ]; then
+    ANTIFREEZE=$(onoff "$af")
+    if [ "$ANTIFREEZE" = 1 ]; then
+      has_proto xhttp || step "XHTTP на этом сервере выключен — защита от заморозки включится вместе с ним"
+      [ -n "$XH_DEC" ] || gen_vlessenc
+    fi
+  fi
+  if [ -n "$rot" ]; then
+    SNI_ROT=$(onoff "$rot")
+    if [ "$SNI_ROT" = 1 ]; then find_sni_alts; else SNI_ALTS=""; fi
+  fi
+  if [ -n "$hop" ]; then
+    if [ "$(onoff "$hop")" = 1 ]; then
+      has_proto hy2 || die "прыжки портов нужны только Hysteria2, а она на сервере выключена"
+      [ -n "$HY_HOP" ] || HY_HOP=$(pick_hop)
+    else
+      HY_HOP=""
+    fi
+  fi
+  save_state
+  yn() { [ "$1" = 1 ] && echo вкл || echo выкл; }
+  step "Защита: от заморозки — $(yn "$ANTIFREEZE"), отпечаток — $FP, чередование имён — $(yn "$SNI_ROT"), прыжки портов — ${HY_HOP:-выкл}"
+  render_xray; render_hysteria; render_hop; render_sub
+  if [ "$KB_SYSTEMD" = 1 ]; then
+    open_firewall
+    apply_hop
+    systemctl restart kombain-xray
+    sleep 2
+    systemctl is-active --quiet kombain-xray || die "Xray не запустился: $(journalctl -u kombain-xray -n 5 --no-pager | tail -3 | tr '\n' ' ')"
+    [ -n "$old_hop" ] && [ "$old_hop" != "$HY_HOP" ] && close_ports "$old_hop/udp"
+  fi
+  step "Готово — устройства с подпиской получат новые настройки сами"
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
+  [ -f "$KB_DIR/hop.sh" ] && sh "$KB_DIR/hop.sh" down >/dev/null 2>&1
   if [ "$KB_SYSTEMD" = 1 ]; then
+    systemctl disable --now kombain-hop >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-hop.service
     systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg kombain-sub kombain-ports.timer >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
     rm -f /etc/systemd/system/kombain-xray.service /etc/systemd/system/kombain-hysteria.service \
@@ -1017,6 +1257,7 @@ case ${1-} in
   ensure-sub) cmd_ensure_sub ;;
   shuffle-ports) shift; cmd_shuffle_ports "$@" ;;
   auto-ports) shift; cmd_auto_ports "$@" ;;
+  harden) shift; cmd_harden "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | uninstall" ;;
 esac
