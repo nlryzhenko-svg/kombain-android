@@ -41,6 +41,38 @@ APK: `app/build/outputs/apk/oss/release/`. Для телефонов на Snapdr
 
 Подпись — собственный ключ `release.keystore`. **Храните его и пароль**: обновления ставятся
 поверх только с тем же ключом.
+Ключ в репозиторий не кладётся (он в `.gitignore`).
+
+## Сборка в GitHub Actions
+
+- **«Сборка APK»** (`.github/workflows/build.yml`) — Actions → «Сборка APK» → Run workflow.
+  APK появляется в артефактах запуска. С галочкой «Опубликовать релиз» (или при пуше тега
+  `v3.3.1`) создаётся релиз с APK.
+- Нужны секреты репозитория (Settings → Secrets and variables → Actions):
+  `KEYSTORE_BASE64` (`base64 -w0 release.keystore`), `KEYSTORE_PASS`, `ALIAS_NAME`, `ALIAS_PASS`.
+  Без них APK не будет подписан вашим ключом и не встанет поверх установленного Kombain.
+
+## Обновление ядер
+
+В приложении два ядра: **sing-box** (`libcore.aar`, форк MatsuriDayo + патч AmneziaWG,
+версии закреплены в `buildScript/lib/core/get_source_env.sh`) и **Xray-core**
+(`libxray.so`, версия в `buildScript/lib/xray.sh`).
+
+```bash
+bash buildScript/update-core.sh --check          # есть ли новые версии (ничего не меняет)
+bash buildScript/update-core.sh                  # обновить и собрать
+bash buildScript/update-core.sh --branch 1.14.x  # перейти на другую ветку sing-box
+```
+
+Скрипт берёт свежий коммит ветки sing-box, libneko, wireguard-go (AmneziaWG) и последний
+стабильный релиз Xray-core, накладывает патч AmneziaWG, делает `go mod tidy` и собирает.
+Если патч не наложился или что-то не собралось — все изменения откатываются.
+
+Workflow **«Обновление ядер»** (`.github/workflows/update-core.yml`) делает то же самое
+автоматически каждый понедельник: собирает APK с новыми ядрами (он в артефактах запуска —
+поставьте и проверьте) и открывает pull request. Влили PR → запустили «Сборка APK» с релизом.
+Чтобы бот мог открывать PR: Settings → Actions → General → «Allow GitHub Actions to create
+and approve pull requests».
 
 ## Ограничения раздачи
 

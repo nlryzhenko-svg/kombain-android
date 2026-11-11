@@ -20,3 +20,7 @@ jniLibs/
 /external
 /gomobile/
 /app/executableSo/
+
+# Kombain: signing key stays private
+release.keystore
+/out/

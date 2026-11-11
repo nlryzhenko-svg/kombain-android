@@ -1,0 +1,81 @@
+name: Обновление ядер
+
+# Раз в неделю проверяет свежие sing-box / libneko / wireguard-go (AmneziaWG) и Xray-core.
+# Если есть — собирает новые ядра и APK, кладёт APK в артефакты для проверки
+# и открывает pull request. Влили PR → запустите «Сборка APK» с релизом.
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Ветка sing-box (пусто — текущая, например 1.12.x)"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.0
+          cache: false
+      - name: NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.0.8775105" > /dev/null
+      - name: Есть ли обновление
+        id: check
+        run: |
+          out=$(bash buildScript/update-core.sh --check ${{ inputs.branch && format('--branch {0}', inputs.branch) || '' }})
+          echo "$out"
+          echo "$out" | tail -1 | grep -q UPDATE=yes && echo "update=yes" >> "$GITHUB_OUTPUT" || echo "update=no" >> "$GITHUB_OUTPUT"
+      - name: Обновить и собрать ядро
+        if: steps.check.outputs.update == 'yes'
+        id: core
+        run: |
+          set -o pipefail
+          out=$(bash buildScript/update-core.sh ${{ inputs.branch && format('--branch {0}', inputs.branch) || '' }} | tee /dev/stderr)
+          last=$(echo "$out" | tail -1)
+          echo "core=$(echo "$last" | sed -E 's/.*CORE=([^ ]*).*/\1/')" >> "$GITHUB_OUTPUT"
+          echo "xray=$(echo "$last" | sed -E 's/.*XRAY=([^ ]*).*/\1/')" >> "$GITHUB_OUTPUT"
+      - name: Недостающее ядро (если обновилось только одно)
+        if: steps.check.outputs.update == 'yes'
+        run: |
+          [ -f app/libs/libcore.aar ] || ./run lib core
+          [ -f app/executableSo/arm64-v8a/libxray.so ] || bash buildScript/lib/xray.sh
+      - name: Сборка APK для проверки
+        if: steps.check.outputs.update == 'yes'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+        run: bash buildScript/ci-apk.sh
+      - uses: actions/upload-artifact@v4
+        if: steps.check.outputs.update == 'yes'
+        with:
+          name: Kombain-${{ env.VERSION }}-sing-box-${{ steps.core.outputs.core }}-xray-${{ steps.core.outputs.xray }}
+          path: out/*.apk
+      - name: Pull request
+        if: steps.check.outputs.update == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          br="core-update-$(date +%Y%m%d)"
+          git config user.name "kombain-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$br"
+          git add buildScript/lib/core/get_source_env.sh buildScript/lib/xray.sh libcore/go.mod libcore/go.sum
+          git commit -m "Ядра: sing-box ${{ steps.core.outputs.core }}, Xray-core ${{ steps.core.outputs.xray }}"
+          git push -f origin "$br"
+          gh pr create --head "$br" --title "Обновление ядер: sing-box ${{ steps.core.outputs.core }}, Xray-core ${{ steps.core.outputs.xray }}" \
+            --body "Новые ядра собрались, патч AmneziaWG наложился. APK для проверки — в артефактах запуска: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            || echo "::warning::PR не создан (Settings → Actions → General → «Allow GitHub Actions to create pull requests»). Ветка $br уже отправлена."

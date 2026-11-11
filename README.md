@@ -1,3 +1,5 @@
+> **Kombain** — форк NekoBox. Что добавлено, сборка и обновление ядер: [KOMBAIN.md](KOMBAIN.md)
+
 # NekoBox for Android
 
 [![API](https://img.shields.io/badge/API-21%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=21)

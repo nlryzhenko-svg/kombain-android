@@ -4,7 +4,12 @@ set -e
 source "buildScript/init/env.sh"
 XRAY_VERSION="${XRAY_VERSION:-v26.11.9}"
 SRC="$SRC_ROOT/../xray-core"
-[ -d "$SRC" ] || git clone --depth 1 -b "$XRAY_VERSION" https://github.com/XTLS/Xray-core.git "$SRC"
+if [ -d "$SRC/.git" ]; then
+  git -C "$SRC" fetch -q --depth 1 origin "refs/tags/$XRAY_VERSION:refs/tags/$XRAY_VERSION" 2>/dev/null || true
+  git -C "$SRC" checkout -q -f "$XRAY_VERSION"
+else
+  git clone --depth 1 -b "$XRAY_VERSION" https://github.com/XTLS/Xray-core.git "$SRC"
+fi
 BIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
 cd "$SRC"
 for spec in "arm64:aarch64-linux-android21-clang:arm64-v8a" "amd64:x86_64-linux-android21-clang:x86_64" "arm:armv7a-linux-androideabi21-clang:armeabi-v7a"; do

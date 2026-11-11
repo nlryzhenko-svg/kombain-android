@@ -25,4 +25,5 @@ if [ ! -f "$GOPATH/bin/gomobile-matsuri" ]; then
     mv "$GOPATH/bin/gobind" "$GOPATH/bin/gobind-matsuri"
 fi
 
-GOBIND=gobind-matsuri gomobile-matsuri init
+# Kombain: "init" would fetch gobind@latest, which needs a newer Go; gobind-matsuri is already installed
+GOBIND=gobind-matsuri gomobile-matsuri init 2>/dev/null || true

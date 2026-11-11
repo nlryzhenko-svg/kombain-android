@@ -1,0 +1,69 @@
+name: Сборка APK
+
+# Вручную (Actions → «Сборка APK» → Run workflow) или тегом v3.3.1 → релиз с APK.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Опубликовать релиз (тег берётся из VERSION_NAME)"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.0
+          cache: false
+      - name: NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.0.8775105" > /dev/null
+      - name: Кэш ядра
+        id: core
+        uses: actions/cache@v4
+        with:
+          path: app/libs/libcore.aar
+          key: libcore-${{ hashFiles('buildScript/lib/core/**', 'libcore/**') }}
+      - name: Сборка ядра (libcore)
+        if: steps.core.outputs.cache-hit != 'true'
+        run: ./run lib core
+      - name: Кэш Xray-core
+        id: xray
+        uses: actions/cache@v4
+        with:
+          path: app/executableSo
+          key: xray-${{ hashFiles('buildScript/lib/xray.sh') }}
+      - name: Сборка Xray-core
+        if: steps.xray.outputs.cache-hit != 'true'
+        run: bash buildScript/lib/xray.sh
+      - name: Сборка APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+        run: bash buildScript/ci-apk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kombain-${{ env.VERSION }}
+          path: out/*.apk
+      - name: Релиз
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${GITHUB_REF_NAME}
+          [[ $tag == v* ]] || tag="v$VERSION"
+          gh release create "$tag" out/*.apk --title "Kombain $VERSION" --notes "Kombain $VERSION" --target "$GITHUB_SHA" \
+            || gh release upload "$tag" out/*.apk --clobber
