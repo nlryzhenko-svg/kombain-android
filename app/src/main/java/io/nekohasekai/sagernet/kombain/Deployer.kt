@@ -96,6 +96,7 @@ object Deployer {
         node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
         node.tgPort = i.optInt("tgPort", node.tgPort)
         node.sdPort = i.optInt("sdPort", node.sdPort)
+        if (json.has("telegram")) node.tgLink = json.optString("telegram")
         node.autoPorts = i.optInt("autoPorts", node.autoPorts)
         if (i.has("fp")) {
             node.fp = i.optString("fp", node.fp)
@@ -110,7 +111,7 @@ object Deployer {
     private fun telegramOf(json: JSONObject?) = json?.optString("telegram").orEmpty()
 
     private fun tgNote(json: JSONObject?) =
-        if (telegramOf(json).isNotEmpty()) " Ссылка на прокси для Telegram — в «Пользователи»." else ""
+        if (telegramOf(json).isNotEmpty()) " Ссылка на прокси для Telegram — на карточке сервера («✈ Прокси для Telegram»)." else ""
 
     // ---------------------------------------------------------------- public actions
 
@@ -125,6 +126,7 @@ object Deployer {
             val n = importLinks(node, node.name, r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Готово: добавлено профилей — $n. Они в группе «${node.name}».${tgNote(r.json)}")
+            telegramOf(r.json).takeIf { it.isNotEmpty() }?.let { onMainDispatcher { telegramReady?.invoke(node, it) } }
         }
     }
 
@@ -152,6 +154,7 @@ object Deployer {
             val n = importLinks(entry, group, r2.json, replace = true)
             ServerStore.upsert(entry)
             finish(true, "Готово: добавлено профилей — $n. Они в группе «$group».${tgNote(r2.json)}")
+            telegramOf(r2.json).takeIf { it.isNotEmpty() }?.let { onMainDispatcher { telegramReady?.invoke(entry, it) } }
         }
     }
 

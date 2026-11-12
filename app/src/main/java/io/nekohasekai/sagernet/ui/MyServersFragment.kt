@@ -130,6 +130,15 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                 textSize = 13f
                 setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
             })
+            // the Telegram proxy link is the thing people forward most: one tap from the card
+            if (s.hasTelegram) inner.addView(TextView(ctx).apply {
+                setText(R.string.srv_tg_card)
+                textSize = 14f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_fab))
+                setPadding(0, dp2px(8), 0, dp2px(2))
+                setOnClickListener { shareTelegram(s) }
+            })
             // health line (from the last check)
             val st = s.stats.takeIf { it.isNotBlank() }?.let { runCatching { org.json.JSONObject(it) }.getOrNull() }
             inner.addView(LinearLayout(ctx).apply {
@@ -209,6 +218,20 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
 
     private fun protoName(p: String) = when (p) {
         "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; "sudoku" -> "Sudoku"; else -> p
+    }
+
+    private fun shareTelegram(s: ServerNode) {
+        if (s.tgLink.isNotBlank()) {
+            UsersSheet.showTelegram(this, s, s.tgLink); return
+        }
+        if (Deployer.running) {
+            snackbar(R.string.srv_busy).show(); return
+        }
+        Deployer.fetchLinks(s) { json, _ ->
+            val link = json?.optString("telegram").orEmpty()
+            if (isAdded && link.isNotBlank()) UsersSheet.showTelegram(this, s, link)
+        }
+        scrollTop()
     }
 
     fun askUser(s: ServerNode) {

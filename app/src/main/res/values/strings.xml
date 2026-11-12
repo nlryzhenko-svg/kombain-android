@@ -987,4 +987,5 @@
     <string name="diag_intro">За полминуты Kombain проверит, что сейчас режет ваша сеть: обычный интернет, зарубежные сайты, доступен ли ваш сервер и какие его протоколы проходят. VPN на время проверки выключится.</string>
     <string name="diag_go">Проверить</string>
     <string name="diag_again">Проверить ещё раз</string>
+    <string name="srv_tg_card">✈  Прокси для Telegram — отправить ссылку</string>
 </resources>
