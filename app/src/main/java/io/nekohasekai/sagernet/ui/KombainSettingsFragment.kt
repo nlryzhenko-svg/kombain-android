@@ -186,12 +186,66 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
             needRestart(); true
         }
 
+        reserve = findPreference("ks_reserve")!!
+        updateReserveSummary()
+        reserve.setOnPreferenceClickListener { askReserve(); true }
         findPreference<Preference>("ks_help")!!.setOnPreferenceClickListener {
             (activity as? MainActivity)?.displayFragment(HelpFragment()); true
         }
         findPreference<Preference>("ks_advanced")!!.setOnPreferenceClickListener {
             (activity as? MainActivity)?.displayFragment(SettingsFragment()); true
         }
+    }
+
+    private lateinit var reserve: Preference
+
+    private fun updateReserveSummary() {
+        reserve.summary = if (io.nekohasekai.sagernet.kombain.AltSub.enabled && DataStore.kbGistLogin.isNotBlank())
+            getString(R.string.ks_reserve_on, DataStore.kbGistLogin) else getString(R.string.ks_reserve_off)
+    }
+
+    private fun askReserve() {
+        val ctx = requireContext()
+        val input = android.widget.EditText(ctx).apply {
+            hint = getString(R.string.ks_reserve_hint)
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+        val box = android.widget.FrameLayout(ctx).apply {
+            val d = resources.displayMetrics.density
+            setPadding((22 * d).toInt(), (8 * d).toInt(), (22 * d).toInt(), 0)
+            addView(input)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.ks_reserve)
+            .setMessage(R.string.ks_reserve_msg)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val token = input.text.toString().trim()
+                if (token.isEmpty()) return@setPositiveButton
+                reserve.setSummary(R.string.ks_reserve_check)
+                runOnDefaultDispatcher {
+                    val old = io.nekohasekai.sagernet.kombain.AltSub.token
+                    io.nekohasekai.sagernet.kombain.AltSub.token = token
+                    val r = runCatching { io.nekohasekai.sagernet.kombain.AltSub.setup() }
+                    if (r.isFailure) io.nekohasekai.sagernet.kombain.AltSub.token = old
+                    onMainDispatcher {
+                        if (!isAdded) return@onMainDispatcher
+                        updateReserveSummary()
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(R.string.ks_reserve)
+                            .setMessage(r.exceptionOrNull()?.message ?: getString(R.string.ks_reserve_done))
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                }
+            }
+            .setNeutralButton(R.string.ks_reserve_disable) { _, _ ->
+                io.nekohasekai.sagernet.kombain.AltSub.token = ""
+                updateReserveSummary()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun onResume() {

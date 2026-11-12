@@ -48,6 +48,11 @@ data class ServerNode(
     /** what the server reports: other names of the masking site, Hysteria2 hop range */
     var sniAlts: String = "",
     var hyHop: String = "",
+    /** last backup of the server (KB_EXPORT): keys, users, settings — enough to move to a new VPS */
+    var backup: String = "",
+    var backupAt: Long = 0L,
+    /** secret for the encrypted reserve subscription (see AltSub) */
+    var altSecret: String = "",
     var hostKey: String = "",
     var groupId: Long = 0L,
     var installedAt: Long = 0L,
@@ -64,6 +69,7 @@ data class ServerNode(
         put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort); put("sdPort", sdPort); put("autoPorts", autoPorts)
         put("fp", fp); put("antifreeze", antifreeze); put("sniRotation", sniRotation); put("hop", hop)
         put("sniAlts", sniAlts); put("hyHop", hyHop)
+        put("backup", backup); put("backupAt", backupAt); put("altSecret", altSecret)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
@@ -82,6 +88,7 @@ data class ServerNode(
             fp = o.optString("fp", "chrome"), antifreeze = o.optBoolean("antifreeze", false),
             sniRotation = o.optBoolean("sniRotation", false), hop = o.optBoolean("hop", false),
             sniAlts = o.optString("sniAlts"), hyHop = o.optString("hyHop"),
+            backup = o.optString("backup"), backupAt = o.optLong("backupAt"), altSecret = o.optString("altSecret"),
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
             stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
         )
@@ -137,6 +144,18 @@ object ServerStore {
                 .build()
         )
         return gen.generateKey()
+    }
+
+    /** Small secrets (tokens) stored with the same Keystore key as the servers. */
+    @Synchronized
+    fun getSecret(name: String): String {
+        val raw = prefs.getString("secret_$name", null) ?: return ""
+        return runCatching { decrypt(raw) }.getOrDefault("")
+    }
+
+    @Synchronized
+    fun setSecret(name: String, value: String) {
+        prefs.edit().apply { if (value.isBlank()) remove("secret_$name") else putString("secret_$name", encrypt(value)) }.apply()
     }
 
     private fun encrypt(plain: String): String {

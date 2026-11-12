@@ -168,6 +168,12 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     /** all = everything through the VPN; blocked = only what is blocked in Russia */
     var kbRouteMode by configurationStore.string("kbRouteMode") { "all" }
     var kbListsUpdated by configurationStore.long("kbListsUpdated") { 0L }
+    // reserve subscription in a GitHub gist (the token itself is kept encrypted in ServerStore)
+    var kbGistId by configurationStore.string("kbGistId")
+    var kbGistLogin by configurationStore.string("kbGistLogin")
+    // smart choice of the protocol per network: {"<network key>": {"id": profileId, "at": ms}}
+    var kbSmartProto by configurationStore.boolean("kbSmartProto") { true }
+    var kbNetMemory by configurationStore.string("kbNetMemory")
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

@@ -243,6 +243,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         // ids keep the actions stable when the Telegram item is absent
         val entries = listOfNotNull(
             8 to getString(R.string.srv_m_protect),
+            10 to getString(R.string.srv_m_move),
             tgItem?.let { 4 to it },
             if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
             5 to getString(R.string.srv_m_sni),
@@ -268,6 +269,9 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                         .setPositiveButton(R.string.srv_sd_yes) { _, _ -> Deployer.enableSudoku(s); scrollTop() }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+
+                    10 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
+                    else (activity as? MainActivity)?.displayFragment(ServerMoveFragment.of(s))
 
                     8 -> ProtectionDialog.show(requireContext(), s) { af, fp, rot, hop ->
                         Deployer.harden(s, af, fp, rot, hop); scrollTop()

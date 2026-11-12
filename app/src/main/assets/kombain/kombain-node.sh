@@ -29,7 +29,13 @@
 #                            fp           — browser TLS fingerprint in the links
 #                            sni-rotation — 2–3 names of the masking site; Kombain spreads connections over them
 #                            hop          — Hysteria2 port hopping over a range of 1000 UDP ports
+#   kombain-node.sh export                    KB_EXPORT <base64 tar.gz>: keys, users, settings — a backup the app keeps
+#   kombain-node.sh import --host IP --data BASE64 [--force]
+#                                             move a server here from such a backup: same keys, users and links
+#                                             (only the address changes)
 #   kombain-node.sh uninstall
+#
+# With KB_WITH_EXPORT=1 every command that prints KB_RESULT also prints KB_EXPORT.
 #
 # Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody),
 #            sudoku (github.com/SUDOKU-ASCII/sudoku: traffic encoded as Sudoku puzzles — low-entropy,
@@ -47,6 +53,7 @@
 #                             "telegram": "tg://proxy?...", "subs": [{"user":..,"url":..}], "info": {...}}
 #   KB_SNI <base64 JSON>     [{"domain":..,"dest":"ip:443","ms":..}] best first
 #   KB_STATS  <base64 JSON>  see cmd_stats
+#   KB_EXPORT <base64 tar.gz> backup of $KB_DIR (see cmd_export)
 set -euo pipefail
 
 KB_DIR=${KB_DIR:-/etc/kombain}
@@ -824,6 +831,17 @@ print_result() {
     "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}" "$SD_PORT")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
+  [ "${KB_WITH_EXPORT:-0}" = 1 ] && emit_export
+  return 0
+}
+
+# what a new server needs to take over: everything else is rendered from these
+EXPORT_FILES="state.env users sudoku.keys sub.crt sub.key hy.crt hy.key"
+
+emit_export() {
+  local f list=""
+  for f in $EXPORT_FILES; do [ -f "$KB_DIR/$f" ] && list+=" $f"; done
+  echo "KB_EXPORT $(tar -C "$KB_DIR" -czf - $list | base64 | tr -d '\n')"
 }
 
 # ---------------------------------------------------------------------------- commands
@@ -1282,6 +1300,14 @@ cmd_auto_ports() {
   [ -n "${BRIDGE_UUID-}" ] && [ "$days" != 0 ] && die "на выходном сервере каскада автосмена портов недоступна"
   AUTO_PORTS=$days
   save_state
+  ports_timer "$days"
+  if [ "$days" -gt 0 ]; then step "Порты будут меняться раз в $days дн. (около 4–6 утра по времени сервера)"
+  else step "Автосмена портов выключена"; fi
+  print_result
+}
+
+ports_timer() { # days (0 = off)
+  local days=$1
   if [ "$KB_SYSTEMD" = 1 ]; then
     systemctl disable --now kombain-ports.timer >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
@@ -1311,9 +1337,7 @@ EOF
       systemctl daemon-reload
     fi
   fi
-  if [ "$days" -gt 0 ]; then step "Порты будут меняться раз в $days дн. (около 4–6 утра по времени сервера)"
-  else step "Автосмена портов выключена"; fi
-  print_result
+  return 0
 }
 
 cmd_harden() {
@@ -1369,6 +1393,60 @@ cmd_harden() {
   print_result
 }
 
+cmd_export() {
+  load_state
+  emit_export
+}
+
+cmd_import() {
+  local host="" data="" force=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --host) host=$2; shift 2 ;;
+      --data) data=$2; shift 2 ;;
+      --force) force=1; shift ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  [ -n "$host" ] && [ -n "$data" ] || die "нужны --host и --data"
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  if [ -f "$(state_file)" ] && [ $force = 0 ]; then
+    die "на этом сервере уже стоит Kombain — переезд затрёт его настройки"
+  fi
+  step "Сервер: $(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Linux}"), $(uname -m)"
+  install_packages
+  local tmp; tmp=$(mktemp -d)
+  printf '%s' "$data" | base64 -d > "$tmp/backup.tgz" 2>/dev/null || die "резервная копия повреждена"
+  tar -xzf "$tmp/backup.tgz" -C "$tmp" || die "резервная копия повреждена"
+  [ -f "$tmp/state.env" ] && [ -f "$tmp/users" ] || die "в резервной копии нет настроек"
+  mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
+  local f
+  for f in $EXPORT_FILES; do
+    [ -f "$tmp/$f" ] && install -m 600 "$tmp/$f" "$KB_DIR/$f"
+  done
+  rm -rf "$tmp"
+  load_state
+  step "Переношу «$NAME»: ${PROTOCOLS//,/, }"
+  HOST=$host
+  # the neighbour site found next to the old server is far from this one: mask as the site itself
+  DEST=""
+  # ports that were fine on the old server may be taken here
+  local b; b=" $(busy_ports | tr '\n' ' ') "
+  case $b in *" $PORT "*) PORT=$(pick_port) ;; esac
+  if has_proto xhttp; then case $b in *" $XH_PORT "*) XH_PORT=$(pick_port "$PORT") ;; esac; fi
+  if has_proto sudoku; then case $b in *" $SD_PORT "*) SD_PORT=$(pick_port "$PORT" "$XH_PORT") ;; esac; fi
+  check_ports
+  download_binaries
+  save_state
+  step "Пишу конфиги"
+  render_all
+  open_firewall; enable_bbr
+  restart_services
+  ports_timer "${AUTO_PORTS:-0}"
+  step "Готово — ключи и пользователи прежние, сменился только адрес"
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   [ -f "$KB_DIR/hop.sh" ] && sh "$KB_DIR/hop.sh" down >/dev/null 2>&1
@@ -1411,6 +1489,8 @@ case ${1-} in
   shuffle-ports) shift; cmd_shuffle_ports "$@" ;;
   auto-ports) shift; cmd_auto_ports "$@" ;;
   harden) shift; cmd_harden "$@" ;;
+  export) cmd_export ;;
+  import) shift; cmd_import "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | export | import | uninstall" ;;
 esac

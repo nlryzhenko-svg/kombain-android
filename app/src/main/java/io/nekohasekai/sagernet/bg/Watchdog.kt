@@ -8,6 +8,7 @@ import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.kombain.AutoPick
+import io.nekohasekai.sagernet.kombain.NetMemory
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -66,9 +67,23 @@ object Watchdog {
         delay(if (recoveries.size >= 3) 120_000 else GRACE)
 
         var fails = 0
+        var remembered = false
+        var net = NetMemory.current()
         while (true) {
             if (service.data.state != BaseService.State.Connected) return
             if (!DataStore.kbWatchdog) return
+            // «умный выбор»: the phone moved to another network — use what worked there before
+            val now = NetMemory.current()
+            if (now != null && now.key != net?.key) {
+                net = now
+                remembered = false
+                val currentId = DataStore.currentProfile.takeIf { it > 0 } ?: DataStore.selectedProxy
+                val known = NetMemory.recall(currentId, now)
+                if (known != null && known != currentId) {
+                    switchTo(service, known, app.getString(R.string.kb_wd_net, now.label))
+                    return
+                }
+            }
             if (deviceIdle() || !phoneOnline()) {
                 fails = 0
                 delay(INTERVAL)
@@ -77,6 +92,10 @@ object Watchdog {
             if (probeTunnel(service)) {
                 if (fails > 0) log("связь восстановилась")
                 fails = 0
+                if (!remembered) {
+                    remembered = true
+                    NetMemory.remember(DataStore.currentProfile.takeIf { it > 0 } ?: DataStore.selectedProxy, net)
+                }
                 delay(INTERVAL)
                 continue
             }
@@ -138,6 +157,17 @@ object Watchdog {
         return false
     }
 
+    private suspend fun switchTo(service: BaseService.Interface, id: Long, message: String) {
+        val p = SagerDatabase.proxyDao.getById(id) ?: return
+        DataStore.selectedProxy = id
+        val text = "$message: ${p.displayName()}"
+        log(text)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(app, text, Toast.LENGTH_LONG).show()
+            if (service.data.state == BaseService.State.Connected) service.stopRunner(true)
+        }
+    }
+
     private suspend fun recover(service: BaseService.Interface) {
         recoveries.addLast(System.currentTimeMillis())
         val currentId = DataStore.currentProfile.takeIf { it > 0 } ?: DataStore.selectedProxy
@@ -155,8 +185,9 @@ object Watchdog {
         }
 
         var message = app.getString(R.string.kb_wd_reconnect, name)
-        if (DataStore.kbAutoServer) {
-            val others = AutoPick.groupOf(currentId).filter { it.id != currentId }
+        if (DataStore.kbAutoServer || DataStore.kbSmartProto) {
+            // the other protocols of the same server (and other servers of the group)
+            val others = NetMemory.fallbackOrder(currentId)
             if (others.isNotEmpty()) {
                 log("ищу живой сервер в группе (${others.size})")
                 val best = AutoPick.test(others).best?.first

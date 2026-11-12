@@ -19,6 +19,8 @@ class NodeResult(
     val stats: JSONObject? = null,
     /** find-sni: [{domain, dest, ms}] best first */
     val sites: org.json.JSONArray? = null,
+    /** KB_EXPORT: backup of the server's keys and settings (base64 tar.gz), see `import` */
+    val export: String? = null,
 )
 
 /**
@@ -99,14 +101,17 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
             exec(s, "cat > $path && chmod 700 $path", script) {}
             val root = node.user.ifBlank { "root" } == "root"
             val cmdArgs = args.joinToString(" ") { q(it) }
-            val cmd = if (root) "bash $path $cmdArgs 2>&1"
-            else if (node.password.isNotBlank()) "sudo -S -p '' bash $path $cmdArgs 2>&1"
-            else "sudo -n bash $path $cmdArgs 2>&1"
+            // KB_WITH_EXPORT: every result also carries a backup the app keeps for «Переехать»
+            val run = "env KB_WITH_EXPORT=1 bash $path $cmdArgs 2>&1"
+            val cmd = if (root) run
+            else if (node.password.isNotBlank()) "sudo -S -p '' $run"
+            else "sudo -n $run"
             val stdin = if (!root && node.password.isNotBlank()) (node.password + "\n").toByteArray() else null
 
             var result: JSONObject? = null
             var stats: JSONObject? = null
             var sites: org.json.JSONArray? = null
+            var export: String? = null
             var error: String? = null
             val code = exec(s, cmd, stdin) { line ->
                 when {
@@ -124,6 +129,8 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
                         org.json.JSONArray(String(Base64.decode(line.removePrefix("KB_SNI ").trim(), Base64.DEFAULT)))
                     }.getOrNull()
 
+                    line.startsWith("KB_EXPORT ") -> export = line.removePrefix("KB_EXPORT ").trim()
+
                     line.startsWith("KB_STATS ") -> stats = runCatching {
                         JSONObject(String(Base64.decode(line.removePrefix("KB_STATS ").trim(), Base64.DEFAULT)))
                     }.getOrNull()
@@ -136,8 +143,8 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
                 error = if (!root) "Команда завершилась с кодом $code (нужен sudo без ограничений или вход под root)"
                 else "Команда завершилась с кодом $code"
             }
-            val ok = error == null && (result != null || stats != null || sites != null || args.firstOrNull() in setOf("status", "uninstall"))
-            return NodeResult(ok, error, result, stats, sites)
+            val ok = error == null && (result != null || stats != null || sites != null || export != null || args.firstOrNull() in setOf("status", "uninstall"))
+            return NodeResult(ok, error, result, stats, sites, export)
         } catch (e: Exception) {
             return NodeResult(false, "Ошибка SSH: ${e.message}", null)
         } finally {

@@ -57,6 +57,26 @@ object Deployer {
         if (ok) runCatching { Maintenance.schedule() }
     }
 
+    /** Runs the node script and keeps the backup it returns (for «Переехать на новый сервер»). */
+    private fun ssh(node: ServerNode) = object {
+        fun run(args: List<String>): NodeResult {
+            val r = SshRunner(node, ::emit).run(args)
+            if (r.ok) r.export?.takeIf { it.length > 100 }?.let {
+                node.backup = it
+                node.backupAt = System.currentTimeMillis()
+            }
+            return r
+        }
+    }
+
+    /** Reserve subscription (GitHub gist): every device finds the server after a move. Never fatal. */
+    private fun publishReserve(node: ServerNode, json: JSONObject) {
+        if (!AltSub.enabled) return
+        runCatching { AltSub.publish(node, json) }
+            .onSuccess { if (it > 0) emit("• Резервный адрес подписки обновлён ($it)") }
+            .onFailure { emit("• Резервный адрес подписки не обновился: ${it.message}") }
+    }
+
     private fun installArgs(n: ServerNode, extra: List<String> = emptyList()) = listOf(
         "install", "--host", n.host.trim(), "--protocols", n.protocols, "--sni", n.sni.trim(),
         "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
@@ -98,7 +118,7 @@ object Deployer {
         if (!start("Установка на ${node.name} (${node.host})")) return
         runOnDefaultDispatcher {
             node.role = "single"
-            val r = SshRunner(node, ::emit).run(installArgs(node))
+            val r = ssh(node).run(installArgs(node))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "установка не удалась")
             node.installedAt = System.currentTimeMillis()
             syncInfo(node, r.json)
@@ -113,7 +133,7 @@ object Deployer {
         runOnDefaultDispatcher {
             emit("── Шаг 1 из 2: выходной сервер ${exit.name}")
             exit.role = "exit"
-            val r1 = SshRunner(exit, ::emit).run(installArgs(exit, listOf("--bridge")))
+            val r1 = ssh(exit).run(installArgs(exit, listOf("--bridge")))
             val bridge = r1.json?.optString("bridge").orEmpty()
             if (!r1.ok || bridge.isBlank()) return@runOnDefaultDispatcher finish(false, r1.error ?: "выходной сервер не установился")
             exit.installedAt = System.currentTimeMillis()
@@ -124,7 +144,7 @@ object Deployer {
                 ?.lines()?.forEach { emit(it) }
             entry.role = "entry"
             entry.exitId = exit.id
-            val r2 = SshRunner(entry, ::emit).run(installArgs(entry, listOf("--role", "entry", "--exit-link", bridge)))
+            val r2 = ssh(entry).run(installArgs(entry, listOf("--role", "entry", "--exit-link", bridge)))
             if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не установился")
             entry.installedAt = System.currentTimeMillis()
             syncInfo(entry, r2.json)
@@ -138,7 +158,7 @@ object Deployer {
     fun addUser(node: ServerNode, userName: String) {
         if (!start("Новый пользователь «$userName» на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("add-user", userName))
+            val r = ssh(node).run(listOf("add-user", userName))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось добавить")
             ServerStore.upsert(node)
             val links = r.json.optJSONArray("links")
@@ -153,7 +173,7 @@ object Deployer {
     fun refreshLinks(node: ServerNode) {
         if (!start("Обновляю профили с ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
+            val r = ssh(node).run(listOf("ensure-sub"))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось получить ссылки")
             syncInfo(node, r.json)
             val n = importLinks(node, groupName(node), r.json, replace = true, onlyFirstUser = true)
@@ -165,7 +185,7 @@ object Deployer {
     fun status(node: ServerNode) {
         if (!start("Состояние ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("stats"))
+            val r = ssh(node).run(listOf("stats"))
             val st = r.stats
             if (st == null) {
                 node.health = r.error ?: "нет ответа"
@@ -189,7 +209,7 @@ object Deployer {
             ports["tuic"]?.let { args += listOf("--tuic-port", it.toString()); node.tuicPort = it }
             ports["tg"]?.let { args += listOf("--tg-port", it.toString()); node.tgPort = it }
             ports["sudoku"]?.let { args += listOf("--sd-port", it.toString()); node.sdPort = it }
-            val r = SshRunner(node, ::emit).run(args)
+            val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить ключи")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
@@ -200,7 +220,7 @@ object Deployer {
                     val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
                     if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Ключи заменены.")
                     emit("── Переключаю входной сервер ${entry.name} на новые ключи")
-                    val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
                     if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
                     ServerStore.upsert(entry)
                     finish(true, "Ключи выходного сервера заменены, каскад продолжает работать.")
@@ -220,7 +240,7 @@ object Deployer {
     fun fetchLinks(node: ServerNode, done: (JSONObject?, String?) -> Unit) {
         if (!start("Пользователи ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
+            val r = ssh(node).run(listOf("ensure-sub"))
             r.json?.let { syncInfo(node, it) }
             ServerStore.upsert(node)
             if (!r.ok || r.json == null) finish(false, r.error ?: "не удалось получить ссылки")
@@ -236,7 +256,7 @@ object Deployer {
     fun connectExisting(node: ServerNode) {
         if (!start("Подключаю ${node.host}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("ensure-sub"))
+            val r = ssh(node).run(listOf("ensure-sub"))
             val json = r.json
             if (!r.ok || json == null) {
                 return@runOnDefaultDispatcher finish(false, r.error ?: "на сервере не найден Kombain")
@@ -258,7 +278,7 @@ object Deployer {
             if (node.role != "exit") n = importLinks(node, groupName(node), json, replace = true)
             ServerStore.upsert(node)
             emit("• Проверяю состояние")
-            val st = SshRunner(node, ::emit).run(listOf("stats")).stats
+            val st = ssh(node).run(listOf("stats")).stats
             if (st != null) {
                 saveStats(node, st)
                 ServerHealth.describe(st).forEach { emit("• $it") }
@@ -274,7 +294,7 @@ object Deployer {
     fun findSites(node: ServerNode, done: (org.json.JSONArray?) -> Unit) {
         if (!start("Ищу сайт для маскировки рядом с ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("find-sni", "--host", node.host.trim()))
+            val r = ssh(node).run(listOf("find-sni", "--host", node.host.trim()))
             ServerStore.upsert(node)
             val n = r.sites?.length() ?: 0
             if (r.sites == null) finish(false, r.error ?: "не удалось проверить")
@@ -288,7 +308,7 @@ object Deployer {
         runOnDefaultDispatcher {
             val args = mutableListOf("set-sni", "--sni", domain)
             if (dest.isNotBlank()) args += listOf("--dest", dest)
-            val r = SshRunner(node, ::emit).run(args)
+            val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить")
             syncInfo(node, r.json)
             val n = if (node.role != "exit") importLinks(node, groupName(node), r.json, replace = true) else 0
@@ -303,7 +323,7 @@ object Deployer {
         if (!start("Новые порты для ${node.name}")) return
         runOnDefaultDispatcher {
             val args = if (node.role == "exit") listOf("shuffle-ports", "--relink") else listOf("shuffle-ports")
-            val r = SshRunner(node, ::emit).run(args)
+            val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить порты")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
@@ -312,7 +332,7 @@ object Deployer {
                 val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
                 if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Порты сменены.")
                 emit("── Переключаю входной сервер ${entry.name} на новый порт")
-                val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
                 if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
                 return@runOnDefaultDispatcher finish(true, "Порты выходного сервера сменены, каскад работает.")
             }
@@ -329,7 +349,7 @@ object Deployer {
             val args = mutableListOf("harden", "--antifreeze", if (antifreeze) "on" else "off", "--fp", fp,
                 "--sni-rotation", if (sniRotation) "on" else "off")
             if (node.protocols.split(',').contains("hy2")) args += listOf("--hop", if (hop) "on" else "off")
-            val r = SshRunner(node, ::emit).run(args)
+            val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
@@ -339,7 +359,7 @@ object Deployer {
                 val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
                 if (entry != null && bridge.isNotBlank()) {
                     emit("── Обновляю связь входного сервера ${entry.name}")
-                    val r2 = SshRunner(entry, ::emit).run(listOf("set-exit", "--exit-link", bridge))
+                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
                     if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
                 }
                 return@runOnDefaultDispatcher finish(true, "Защита выходного сервера обновлена, каскад работает.")
@@ -350,10 +370,56 @@ object Deployer {
         }
     }
 
+    /**
+     * «Переехать на новый сервер»: the same keys, users and settings on [target] (a fresh VPS), from the backup
+     * the app keeps — works even when the old server can't be reached any more. Only the address changes:
+     * this phone's profiles are updated, other devices find the new address through the reserve subscription.
+     */
+    fun move(old: ServerNode, target: ServerNode) {
+        if (!start("Переезд «${old.name}»: ${old.host} → ${target.host}")) return
+        runOnDefaultDispatcher {
+            var data = old.backup
+            if (data.isBlank()) {
+                emit("── Резервной копии в приложении нет — забираю настройки со старого сервера")
+                val r0 = ssh(old).run(listOf("export"))
+                data = r0.export.orEmpty()
+                if (data.isBlank()) return@runOnDefaultDispatcher finish(false,
+                    "Старый сервер недоступен (${r0.error ?: "нет ответа"}), а резервной копии нет. Поднимите новый сервер через «Поднять сервер».")
+            } else {
+                emit("── Резервная копия от " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale("ru")).format(java.util.Date(old.backupAt)))
+            }
+            emit("── Ставлю на ${target.host}")
+            val r = ssh(target).run(listOf("import", "--host", target.host.trim(), "--data", data))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "переезд не удался")
+            old.host = target.host.trim(); old.sshPort = target.sshPort; old.user = target.user
+            old.password = target.password; old.privateKey = target.privateKey; old.hostKey = target.hostKey
+            if (target.backup.isNotBlank()) { old.backup = target.backup; old.backupAt = target.backupAt }
+            old.installedAt = System.currentTimeMillis(); old.stats = ""; old.statsAt = 0L; old.health = ""
+            syncInfo(old, r.json)
+            ServerStore.upsert(old)
+            if (old.role == "exit") {
+                val bridge = r.json.optString("bridge")
+                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == old.id }
+                if (entry != null && bridge.isNotBlank()) {
+                    emit("── Переключаю входной сервер ${entry.name} на новый адрес")
+                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
+                    if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
+                    ServerStore.upsert(entry)
+                }
+                return@runOnDefaultDispatcher finish(true, "Выходной сервер переехал, каскад работает.")
+            }
+            val n = importLinks(old, groupName(old), r.json, replace = true)
+            ServerStore.upsert(old)
+            finish(true, "Переезд завершён, профили обновлены ($n)." +
+                (if (AltSub.enabled) " Устройства с подпиской найдут новый адрес сами." else " Другим устройствам отправьте новые подписки («Пользователи»).") +
+                " Старый VPS не тронут — удалите его у хостера, когда убедитесь, что всё работает.")
+        }
+    }
+
     fun setAutoPorts(node: ServerNode, days: Int) {
         if (!start(if (days > 0) "Автосмена портов на ${node.name}" else "Выключаю автосмену портов на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("auto-ports", "--every", days.toString()))
+            val r = ssh(node).run(listOf("auto-ports", "--every", days.toString()))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
@@ -364,7 +430,7 @@ object Deployer {
     fun enableTelegram(node: ServerNode, port: Int) {
         if (!start("Прокси для Telegram на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("enable-telegram", "--tg-port", port.toString()))
+            val r = ssh(node).run(listOf("enable-telegram", "--tg-port", port.toString()))
             val link = telegramOf(r.json)
             if (!r.ok || r.json == null || link.isEmpty()) {
                 return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось включить прокси")
@@ -380,7 +446,7 @@ object Deployer {
     fun enableSudoku(node: ServerNode) {
         if (!start("Sudoku на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("enable-sudoku", "--sd-port", node.sdPort.toString()))
+            val r = ssh(node).run(listOf("enable-sudoku", "--sd-port", node.sdPort.toString()))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось включить Sudoku")
             syncInfo(node, r.json)
             val n = importLinks(node, groupName(node), r.json, replace = true)
@@ -392,7 +458,7 @@ object Deployer {
     fun disableSudoku(node: ServerNode) {
         if (!start("Выключаю Sudoku на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("disable-sudoku"))
+            val r = ssh(node).run(listOf("disable-sudoku"))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
             syncInfo(node, r.json)
             val n = importLinks(node, groupName(node), r.json, replace = true)
@@ -404,7 +470,7 @@ object Deployer {
     fun disableTelegram(node: ServerNode) {
         if (!start("Выключаю прокси для Telegram на ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("disable-telegram"))
+            val r = ssh(node).run(listOf("disable-telegram"))
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
@@ -415,7 +481,7 @@ object Deployer {
     fun removeUser(node: ServerNode, userName: String) {
         if (!start("Удаляю пользователя «$userName» с ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("remove-user", userName))
+            val r = ssh(node).run(listOf("remove-user", userName))
             if (!r.ok) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось удалить")
             ServerStore.upsert(node)
             finish(true, "Пользователь «$userName» удалён — его ссылки больше не работают.")
@@ -432,7 +498,7 @@ object Deployer {
     fun uninstall(node: ServerNode) {
         if (!start("Удаляю Kombain с ${node.name}")) return
         runOnDefaultDispatcher {
-            val r = SshRunner(node, ::emit).run(listOf("uninstall"))
+            val r = ssh(node).run(listOf("uninstall"))
             if (r.error != null) return@runOnDefaultDispatcher finish(false, r.error)
             ServerStore.remove(node.id)
             finish(true, "Сервер очищен и убран из списка. Профили в приложении можно удалить вручную.")
@@ -461,7 +527,7 @@ object Deployer {
         // the first user's subscription keeps this device's profiles up to date after key changes
         val subUrl = json.optJSONArray("subs")?.let { a ->
             (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("user") == firstUser }?.optString("url")
-        }.orEmpty()
+        }.orEmpty().let { AltSub.decorate(node, it) }
         fun ProxyGroup.applySub() {
             if (subUrl.isBlank()) return
             type = io.nekohasekai.sagernet.GroupType.SUBSCRIPTION
@@ -503,6 +569,7 @@ object Deployer {
             DataStore.selectedGroup = groupId
             DataStore.selectedProxy = firstProfile
         }
+        publishReserve(node, json)
         return count
     }
 }

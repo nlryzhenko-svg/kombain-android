@@ -408,6 +408,19 @@ class MainActivity : ThemedActivity(),
         }
     }
 
+    /** «Умный выбор протокола»: the profile of this server that worked on the current network last time. */
+    private suspend fun applyNetMemory() {
+        val current = DataStore.selectedProxy
+        val net = io.nekohasekai.sagernet.kombain.NetMemory.current() ?: return
+        val id = io.nekohasekai.sagernet.kombain.NetMemory.recall(current, net) ?: return
+        if (id == current) return
+        val p = SagerDatabase.proxyDao.getById(id) ?: return
+        DataStore.selectedProxy = id
+        ProfileManager.postUpdate(current)
+        ProfileManager.postUpdate(id)
+        onMainDispatcher { snackbar(getString(R.string.kb_smart_pick, net.label, p.displayName())).show() }
+    }
+
     fun toggleService() {
         if (DataStore.serviceState.canStop) {
             SagerNet.stopService()
@@ -416,6 +429,7 @@ class MainActivity : ThemedActivity(),
         if (!DataStore.kbAutoServer) {
             runOnDefaultDispatcher {
                 refreshOwnSubscription()
+                applyNetMemory()
                 onMainDispatcher { connect.launch(null) }
             }
             return

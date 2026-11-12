@@ -201,7 +201,10 @@ object UsersSheet {
     }
 
     /** sn://subscription link: Kombain on another phone adds it as a subscription (QR scan or clipboard). */
-    private fun showSub(f: androidx.fragment.app.Fragment, node: ServerNode, user: String, url: String) {
+    private fun showSub(f: androidx.fragment.app.Fragment, node: ServerNode, user: String, plainUrl: String) {
+        // with a reserve address the link survives a move of the server
+        val url = io.nekohasekai.sagernet.kombain.AltSub.decorate(node, plainUrl)
+        if (url != plainUrl) io.nekohasekai.sagernet.kombain.ServerStore.upsert(node)
         val ctx = f.context ?: return
         val name = "${node.name} · $user"
         val link = "sn://subscription?url=" + java.net.URLEncoder.encode(url, "UTF-8") +

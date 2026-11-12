@@ -57,33 +57,60 @@ object RawUpdater : GroupUpdater() {
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
 
-            // Kombain: own servers serve the subscription with a self-signed certificate pinned in the link
-            val kbPin = link.substringAfter("#kbpin=", "").takeIf { it.length == 64 }
-            val response = Libcore.newHttpClient().apply {
-                trySocks5(DataStore.mixedPort)
-                tryH3Direct()
-                when (DataStore.appTLSVersion) {
-                    "1.3" -> restrictedTLS()
+            // Kombain: own servers serve the subscription with a self-signed certificate pinned in the link;
+            // the fragment may also carry a reserve address: #kbpin=<sha256>&kbalt=<url>&kbkey=<key>
+            val frag = link.substringAfter('#', "").split('&').associate { it.substringBefore('=') to it.substringAfter('=', "") }
+            val kbPin = frag["kbpin"]?.takeIf { it.length == 64 }
+            val kbAlt = frag["kbalt"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+            val kbKey = frag["kbkey"]
+            var content: String? = null
+            var response: libcore.HTTPResponse? = null
+            try {
+                response = Libcore.newHttpClient().apply {
+                    trySocks5(DataStore.mixedPort)
+                    tryH3Direct()
+                    when (DataStore.appTLSVersion) {
+                        "1.3" -> restrictedTLS()
+                    }
+                    if (kbPin != null) pinnedSHA256(kbPin)
+                }.newRequest().apply {
+                    if (DataStore.allowInsecureOnRequest || kbPin != null) {
+                        allowInsecure()
+                    }
+                    setURL(if (kbPin != null) link.substringBefore('#') else subscription.link)
+                    setUserAgent(subscription.customUserAgent.takeIf { it.isNotBlank() } ?: USER_AGENT)
+                }.execute()
+                content = Util.getStringBox(response.contentString)
+            } catch (e: Exception) {
+                if (kbAlt.isNullOrBlank() || kbKey.isNullOrBlank()) throw e
+                // the server is unreachable — maybe it moved: read the encrypted reserve copy
+                Logs.w("[Kombain] подписка недоступна (${e.message}) — читаю резервный адрес")
+                val alt = Libcore.newHttpClient().apply {
+                    trySocks5(DataStore.mixedPort)
+                    modernTLS()
+                }.newRequest().apply {
+                    setURL(kbAlt + (if ('?' in kbAlt) "&" else "?") + "t=" + System.currentTimeMillis())
+                    setUserAgent(USER_AGENT)
+                }.execute()
+                val data = io.nekohasekai.sagernet.kombain.AltSub.decrypt(kbKey, Util.getStringBox(alt.contentString))
+                val newSub = data.optString("sub")
+                if (newSub.isNotBlank() && newSub != link) {
+                    Logs.w("[Kombain] сервер переехал — новая подписка ${newSub.substringBefore('#')}")
+                    subscription.link = newSub
                 }
-                if (kbPin != null) pinnedSHA256(kbPin)
-            }.newRequest().apply {
-                if (DataStore.allowInsecureOnRequest || kbPin != null) {
-                    allowInsecure()
-                }
-                setURL(if (kbPin != null) link.substringBefore('#') else subscription.link)
-                setUserAgent(subscription.customUserAgent.takeIf { it.isNotBlank() } ?: USER_AGENT)
-            }.execute()
-            proxies = parseRaw(Util.getStringBox(response.contentString))
+                content = data.optString("links")
+            }
+            proxies = parseRaw(content.orEmpty())
                 ?: error(app.getString(R.string.no_proxies_found))
             // our servers run current Xray: VLESS goes through the Xray engine, as when imported over SSH
             if (kbPin != null) proxies.forEach { (it as? io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean)?.xrayEngine = true }
 
             subscription.subscriptionUserinfo =
-                Util.getStringBox(response.getHeader("Subscription-Userinfo"))
+                response?.let { Util.getStringBox(it.getHeader("Subscription-Userinfo")) }.orEmpty()
 
             // 修改默认名字
             if (proxyGroup.name?.startsWith("Subscription #") == true) {
-                var remoteName = Util.getStringBox(response.getHeader("content-disposition"))
+                var remoteName = response?.let { Util.getStringBox(it.getHeader("content-disposition")) }.orEmpty()
                 if (remoteName.isNotBlank()) {
                     remoteName = Util.decodeFilename(remoteName)
                     if (remoteName.isNotBlank()) {

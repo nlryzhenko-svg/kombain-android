@@ -70,6 +70,12 @@
             app:summary="@string/ks_watchdog_sum"
             app:title="@string/ks_watchdog" />
         <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_auto"
+            app:key="kbSmartProto"
+            app:summary="@string/ks_smart_sum"
+            app:title="@string/ks_smart" />
+        <SwitchPreference
             app:defaultValue="false"
             app:icon="@drawable/ic_kombain_auto"
             app:key="kbAutoServer"
@@ -115,6 +121,10 @@
             app:key="kbWatchServers"
             app:summary="@string/ks_watchsrv_sum"
             app:title="@string/ks_watchsrv" />
+        <Preference
+            app:icon="@drawable/ic_kombain_shield_check"
+            app:key="ks_reserve"
+            app:title="@string/ks_reserve" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_look">

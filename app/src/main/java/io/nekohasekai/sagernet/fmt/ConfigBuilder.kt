@@ -619,6 +619,11 @@ fun buildConfig(
                 port = subs.map { it.port }.distinct()
                 outbound = TAG_BYPASS
             })
+            // the reserve subscription copy (GitHub gist) is read directly too: the tunnel may be dead
+            if (SagerDatabase.groupDao.allGroups().any { it.subscription?.link.orEmpty().contains("&kbalt=") }) route.rules.add(0, Rule_DefaultOptions().apply {
+                domain = listOf("gist.githubusercontent.com")
+                outbound = TAG_BYPASS
+            })
         }.onFailure { Logs.w(it) }
 
         // Kombain «только заблокированное»: blocked-in-Russia domains and IPs go through the proxy, the rest direct

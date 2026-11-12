@@ -961,4 +961,30 @@
     <string name="srv_sd_off_msg">Профили Sudoku на «%s» перестанут работать.</string>
     <string name="srv_sd_yes">Включить</string>
     <string name="srv_sd_off_yes">Выключить</string>
+    <!-- 3.6 -->
+    <string name="ks_smart">Умный выбор протокола</string>
+    <string name="ks_smart_sum">Запоминает, какой протокол вашего сервера работает в каждой сети (мобильный интернет, домашний Wi-Fi), и сам включает его. Если связь «замёрзла» — переходит на следующий протокол того же сервера.</string>
+    <string name="ks_reserve">Резервный адрес подписки</string>
+    <string name="ks_reserve_off">Выключен — если IP сервера заблокируют, устройства не узнают, куда он переехал</string>
+    <string name="ks_reserve_on">Включён (GitHub: %s)</string>
+    <string name="ks_reserve_msg">Подписка живёт на самом сервере. Если его IP заблокируют и вы переедете на новый VPS, другие устройства не узнают новый адрес.\n\nKombain может хранить зашифрованную копию подписок в вашем GitHub (секретный gist). Подписки получат запасной адрес, и при переезде все устройства найдут новый сервер сами. Ключ шифрования есть только в ссылках подписок — GitHub содержимое прочитать не может.\n\nНужен токен: github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token, отметьте только «gist», срок — без ограничения.</string>
+    <string name="ks_reserve_hint">Токен GitHub (ghp_…)</string>
+    <string name="ks_reserve_check">Проверяю токен…</string>
+    <string name="ks_reserve_done">Готово: резервный адрес включён. Чтобы он появился у других устройств, откройте у сервера «Пользователи» → «Подписка» и отправьте ссылку заново (один раз).</string>
+    <string name="ks_reserve_disable">Выключить</string>
+    <string name="srv_move">Переезд на новый сервер</string>
+    <string name="srv_m_move">Переехать на новый сервер…</string>
+    <string name="srv_move_title">Новый VPS для «%s»</string>
+    <string name="srv_move_hint">Если IP старого сервера (%s) заблокировали — купите новый VPS и введите доступ к нему. Kombain перенесёт ключи, пользователей и настройки из резервной копии, которая хранится в приложении: старый сервер для этого не нужен. Сменится только адрес.</string>
+    <string name="srv_move_hint_nobackup">Резервной копии этого сервера в приложении пока нет (она появится после любого действия с сервером). Kombain попробует забрать настройки со старого сервера (%s) — для этого он должен быть доступен.</string>
+    <string name="srv_move_go">Переехать</string>
+    <string name="srv_move_same">Это адрес старого сервера</string>
+    <string name="kb_wd_net">Сеть сменилась на «%s» — беру протокол, который здесь работал</string>
+    <string name="kb_smart_pick">%1$s: подключаюсь через «%2$s» — здесь он работал</string>
+    <string name="more_diag">Диагностика</string>
+    <string name="more_diag_sub">Что работает в этой сети</string>
+    <string name="diag_title">Диагностика сети</string>
+    <string name="diag_intro">За полминуты Kombain проверит, что сейчас режет ваша сеть: обычный интернет, зарубежные сайты, доступен ли ваш сервер и какие его протоколы проходят. VPN на время проверки выключится.</string>
+    <string name="diag_go">Проверить</string>
+    <string name="diag_again">Проверить ещё раз</string>
 </resources>
