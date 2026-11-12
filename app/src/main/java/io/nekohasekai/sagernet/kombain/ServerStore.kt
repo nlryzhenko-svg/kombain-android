@@ -42,7 +42,8 @@ data class ServerNode(
     var fp: String = "firefox",
     var antifreeze: Boolean = true,
     var sniRotation: Boolean = true,
-    var hop: Boolean = true,
+    // off by default: on Russian mobile networks frequent new UDP flows made Hysteria2 flaky
+    var hop: Boolean = false,
     /** what the server reports: other names of the masking site, Hysteria2 hop range */
     var sniAlts: String = "",
     var hyHop: String = "",

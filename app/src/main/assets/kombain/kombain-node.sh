@@ -6,7 +6,7 @@
 #                            [--sni www.microsoft.com] [--port 443] [--xh-port 8443] [--hy-port 443]
 #                            [--tuic-port 8443] [--tg-port 9443] [--name "Мой сервер"] [--user "Телефон"]
 #                            [--bridge] [--exit-link vless://...]
-#                            [--fp firefox] [--antifreeze 1] [--sni-rotation 1] [--hop 1]
+#                            [--fp firefox] [--antifreeze 1] [--sni-rotation 1] [--hop 0]
 #   kombain-node.sh add-user NAME | remove-user NAME
 #   kombain-node.sh links
 #   kombain-node.sh status            (human readable)
@@ -765,7 +765,7 @@ check_ports() {
 cmd_install() {
   ROLE=single; HOST=""; PROTOCOLS="vless,xhttp,hy2"; SNI="www.microsoft.com"; PORT=443; HY_PORT=443
   XH_PORT=8443; TUIC_PORT=8443; TG_PORT=9443; TG_SECRET=""; DEST=""; SUB_PORT=$((20000 + RANDOM % 40000))
-  NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link="" hop=1
+  NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link="" hop=0
   FP=firefox; ANTIFREEZE=1; SNI_ROT=1; SNI_ALTS=""; HY_HOP=""
   while [ $# -gt 0 ]; do
     case $1 in

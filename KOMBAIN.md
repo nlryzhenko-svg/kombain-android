@@ -124,7 +124,7 @@ Keystore. На сервере: `/etc/kombain`, `/usr/local/bin/kombain-{xray,hys
 ## Защита от блокировок (с 3.4.0)
 
 Команда сервера `kombain-node.sh harden [--antifreeze on|off] [--fp …] [--sni-rotation on|off] [--hop on|off]`,
-в приложении — «Ещё» у сервера → «Защита от блокировок…». У новых серверов всё включено.
+в приложении — «Ещё» у сервера → «Защита от блокировок…». У новых серверов всё, кроме прыжков портов, включено (прыжки на мобильном интернете в РФ давали «нет связи»).
 
 - **Против «заморозки»**: XHTTP-вход получает VLESS Encryption (`xray vlessenc`, X25519) и Vision;
   в ссылке `mode=stream-one` и `extra={"xmux":{"maxConnections":2}}`.

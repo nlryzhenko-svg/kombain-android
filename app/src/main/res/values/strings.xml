@@ -937,7 +937,7 @@
     <string name="srv_rot_hint">Сервер принимает 2–3 имени одного сайта (например, site.com и www.site.com), а Kombain распределяет соединения между ними — нет «залпа» рукопожатий к одному имени.</string>
     <string name="srv_rot_now">Сейчас: %s</string>
     <string name="srv_hop_title">Прыжки портов Hysteria2</string>
-    <string name="srv_hop_hint">Hysteria2 слушает сразу 1000 UDP-портов, а приложение меняет порт каждые 10 секунд — один «подозрительный» порт не заблокировать.</string>
+    <string name="srv_hop_hint">Hysteria2 слушает сразу 1000 UDP-портов, а приложение меняет порт каждые 10 секунд — помогает, когда провайдер режет конкретный порт. На мобильном интернете в РФ может, наоборот, вызывать «нет связи»: тогда выключите.</string>
     <string name="srv_hop_now">Сейчас: порты %s</string>
     <string name="srv_wl_checking">Проверяю белые списки мобильного интернета…</string>
     <string name="srv_wl_failed">Не удалось проверить белые списки.</string>
