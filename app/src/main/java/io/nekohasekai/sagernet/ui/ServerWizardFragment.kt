@@ -127,6 +127,8 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
             if (view.findViewById<CheckBox>(R.id.p_xhttp).isChecked) add("xhttp")
             if (view.findViewById<CheckBox>(R.id.p_hy2).isChecked) add("hy2")
             if (view.findViewById<CheckBox>(R.id.p_tuic).isChecked) add("tuic")
+            // Sudoku can't hand traffic to a cascade's exit: single servers only
+            if (!cascade && view.findViewById<CheckBox>(R.id.p_sudoku).isChecked) add("sudoku")
         }
         if (protos.isEmpty()) {
             snackbar(R.string.srv_err_vpn_proto).show(); return

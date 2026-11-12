@@ -1,0 +1,57 @@
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <EditTextPreference
+        app:icon="@drawable/ic_social_emoji_symbols"
+        app:key="profileName"
+        app:title="@string/profile_name"
+        app:useSimpleSummaryProvider="true" />
+
+    <PreferenceCategory app:title="@string/proxy_cat">
+
+        <EditTextPreference
+            app:icon="@drawable/ic_hardware_router"
+            app:key="serverAddress"
+            app:title="@string/server_address"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:icon="@drawable/ic_maps_directions_boat"
+            app:key="serverPort"
+            app:title="@string/server_port"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:dialogLayout="@layout/layout_password_dialog"
+            app:icon="@drawable/ic_settings_password"
+            app:key="serverPassword"
+            app:title="@string/sudoku_key" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="prefer_entropy"
+            app:entries="@array/sudoku_ascii_entry"
+            app:entryValues="@array/sudoku_ascii_value"
+            app:icon="@drawable/ic_baseline_compare_arrows_24"
+            app:key="serverProtocol"
+            app:title="@string/sudoku_ascii"
+            app:useSimpleSummaryProvider="true" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="chacha20-poly1305"
+            app:entries="@array/sudoku_aead_value"
+            app:entryValues="@array/sudoku_aead_value"
+            app:icon="@drawable/ic_baseline_layers_24"
+            app:key="serverEncryption"
+            app:title="@string/sudoku_aead"
+            app:useSimpleSummaryProvider="true" />
+        <moe.matsuri.nb4a.ui.SimpleMenuPreference
+            app:defaultValue="ws"
+            app:entries="@array/sudoku_mask_value"
+            app:entryValues="@array/sudoku_mask_value"
+            app:icon="@drawable/baseline_public_24"
+            app:key="serverNetwork"
+            app:title="@string/sudoku_mask"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:icon="@drawable/ic_baseline_texture_24"
+            app:key="serverHeaders"
+            app:title="@string/sudoku_tables"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

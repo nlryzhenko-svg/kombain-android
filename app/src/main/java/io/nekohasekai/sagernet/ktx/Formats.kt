@@ -230,6 +230,13 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
             }.onFailure {
                 Logs.w(it)
             }
+        } else if (startsWith("sudoku://")) {
+            Logs.d("Try parse sudoku link: $this")
+            runCatching {
+                entities.add(io.nekohasekai.sagernet.fmt.sudoku.parseSudoku(this))
+            }.onFailure {
+                Logs.w(it)
+            }
         } else if (startsWith("anytls://")) {
             Logs.d("Try parse anytls link: $this")
             runCatching {

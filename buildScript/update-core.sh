@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Kombain: обновление ядер приложения:
 #   - sing-box (libcore.aar) с зависимостями libneko и wireguard-go (AmneziaWG);
-#   - Xray-core (app/executableSo/*/libxray.so) — движок для VLESS/Reality.
+#   - Xray-core (app/executableSo/*/libxray.so) — движок для VLESS/Reality;
+#   - Sudoku (app/executableSo/*/libsudoku.so).
 #
 #   bash buildScript/update-core.sh            обновить до свежих версий и собрать оба ядра
 #   bash buildScript/update-core.sh --check    только показать, есть ли обновление (ничего не меняет)
@@ -51,6 +52,11 @@ old_xray=$(sed -n 's/^XRAY_VERSION="${XRAY_VERSION:-\(v[^}]*\)}"$/\1/p' "$XRAY_S
 new_xray=$(git ls-remote --tags --refs https://github.com/XTLS/Xray-core.git | awk -F/ '{print $3}' \
   | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
 [ -n "$new_xray" ] || { echo "не нашёл релизы Xray-core" >&2; exit 1; }
+SD_SH=buildScript/lib/sudoku.sh
+old_sd=$(sed -n 's/^SUDOKU_VERSION="${SUDOKU_VERSION:-\(v[^}]*\)}"$/\1/p' "$SD_SH")
+# the tag GitHub marks as the latest release (Sudoku's tags don't sort by version)
+new_sd=$( { curl -fsSI https://github.com/SUDOKU-ASCII/sudoku/releases/latest | awk -F/ 'tolower($0) ~ /^location:/ {print $NF}' | tr -d '\r'; } 2>/dev/null || true)
+[ -n "$new_sd" ] || new_sd=$old_sd
 
 changed=0 sb_changed=0 xray_changed=0
 show() { # name old new
@@ -64,6 +70,9 @@ show wireguard "$COMMIT_WIREGUARD_AWG" "$new_wg"
 [ "$changed" = 1 ] && sb_changed=1
 show Xray-core "$old_xray" "$new_xray"
 [ "$old_xray" != "$new_xray" ] && xray_changed=1
+sd_changed=0
+show Sudoku "$old_sd" "$new_sd"
+[ "$old_sd" != "$new_sd" ] && sd_changed=1
 
 core_version() { # human version of the sing-box checkout, e.g. 1.12.19-neko-1
   git -C "$ROOT/../sing-box" log -1 --format=%s 2>/dev/null | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+[^ ]*' || echo "${COMMIT_SING_BOX:0:10}"
@@ -81,11 +90,12 @@ fi
 
 # keep the old state to roll back
 backup=$(mktemp -d)
-cp "$ENV_FILE" "$XRAY_SH" libcore/go.mod libcore/go.sum "$backup/"
+cp "$ENV_FILE" "$XRAY_SH" "$SD_SH" libcore/go.mod libcore/go.sum "$backup/"
 rollback() {
   echo "!! $1 — откатываю изменения" >&2
   cp "$backup/get_source_env.sh" "$ENV_FILE"
   cp "$backup/xray.sh" "$XRAY_SH"
+  cp "$backup/sudoku.sh" "$SD_SH"
   cp "$backup/go.mod" "$backup/go.sum" libcore/
   source "$ENV_FILE"
   bash buildScript/lib/core/get_source.sh >/dev/null 2>&1 || true
@@ -120,6 +130,14 @@ if [ "$xray_changed" = 1 ]; then
   if [ "$BUILD" = 1 ]; then
     echo ">> сборка Xray-core $new_xray"
     bash "$XRAY_SH" || rollback "Xray-core $new_xray не собирается"
+  fi
+fi
+
+if [ "$sd_changed" = 1 ]; then
+  sed -i "s/^SUDOKU_VERSION=.*/SUDOKU_VERSION=\"\${SUDOKU_VERSION:-$new_sd}\"/" "$SD_SH"
+  if [ "$BUILD" = 1 ]; then
+    echo ">> сборка Sudoku $new_sd"
+    bash "$SD_SH" || rollback "Sudoku $new_sd не собирается"
   fi
 fi
 

@@ -60,7 +60,7 @@ object Deployer {
     private fun installArgs(n: ServerNode, extra: List<String> = emptyList()) = listOf(
         "install", "--host", n.host.trim(), "--protocols", n.protocols, "--sni", n.sni.trim(),
         "--port", n.vpnPort.toString(), "--hy-port", n.hyPort.toString(),
-        "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--tg-port", n.tgPort.toString(),
+        "--xh-port", n.xhPort.toString(), "--tuic-port", n.tuicPort.toString(), "--tg-port", n.tgPort.toString(), "--sd-port", n.sdPort.toString(),
         "--name", n.name.trim(),
         "--fp", n.fp, "--antifreeze", if (n.antifreeze) "1" else "0",
         "--sni-rotation", if (n.sniRotation) "1" else "0", "--hop", if (n.hop) "1" else "0",
@@ -75,6 +75,7 @@ object Deployer {
         node.vpnPort = i.optInt("port", node.vpnPort); node.xhPort = i.optInt("xhPort", node.xhPort)
         node.hyPort = i.optInt("hyPort", node.hyPort); node.tuicPort = i.optInt("tuicPort", node.tuicPort)
         node.tgPort = i.optInt("tgPort", node.tgPort)
+        node.sdPort = i.optInt("sdPort", node.sdPort)
         node.autoPorts = i.optInt("autoPorts", node.autoPorts)
         if (i.has("fp")) {
             node.fp = i.optString("fp", node.fp)
@@ -187,6 +188,7 @@ object Deployer {
             ports["hy2"]?.let { args += listOf("--hy-port", it.toString()); node.hyPort = it }
             ports["tuic"]?.let { args += listOf("--tuic-port", it.toString()); node.tuicPort = it }
             ports["tg"]?.let { args += listOf("--tg-port", it.toString()); node.tgPort = it }
+            ports["sudoku"]?.let { args += listOf("--sd-port", it.toString()); node.sdPort = it }
             val r = SshRunner(node, ::emit).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить ключи")
             syncInfo(node, r.json)
@@ -372,6 +374,30 @@ object Deployer {
             finish(true, "Прокси для Telegram работает.")
             emit(link)
             onMainDispatcher { telegramReady?.invoke(node, link) }
+        }
+    }
+
+    fun enableSudoku(node: ServerNode) {
+        if (!start("Sudoku на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("enable-sudoku", "--sd-port", node.sdPort.toString()))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось включить Sudoku")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Sudoku работает, профили обновлены ($n). Устройства с подпиской получат его сами.")
+        }
+    }
+
+    fun disableSudoku(node: ServerNode) {
+        if (!start("Выключаю Sudoku на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = SshRunner(node, ::emit).run(listOf("disable-sudoku"))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Sudoku выключен, профили обновлены ($n).")
         }
     }
 

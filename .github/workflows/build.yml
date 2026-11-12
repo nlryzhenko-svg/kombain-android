@@ -38,15 +38,17 @@ jobs:
       - name: Сборка ядра (libcore)
         if: steps.core.outputs.cache-hit != 'true'
         run: ./run lib core
-      - name: Кэш Xray-core
+      - name: Кэш Xray-core и Sudoku
         id: xray
         uses: actions/cache@v4
         with:
           path: app/executableSo
-          key: xray-${{ hashFiles('buildScript/lib/xray.sh') }}
-      - name: Сборка Xray-core
+          key: exe-${{ hashFiles('buildScript/lib/xray.sh', 'buildScript/lib/sudoku.sh') }}
+      - name: Сборка Xray-core и Sudoku
         if: steps.xray.outputs.cache-hit != 'true'
-        run: bash buildScript/lib/xray.sh
+        run: |
+          bash buildScript/lib/xray.sh
+          bash buildScript/lib/sudoku.sh
       - name: Сборка APK
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}

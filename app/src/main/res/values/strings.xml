@@ -688,7 +688,7 @@
     <string name="srv_title">Мои серверы</string>
     <string name="srv_new">Поднять сервер</string>
     <string name="srv_hero_title">Свой VPN-сервер</string>
-    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. Kombain сам поставит VLESS Reality, XHTTP, Hysteria2, TUIC и прокси для Telegram, настроит и добавит профили. Свой домен не нужен.</string>
+    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. Kombain сам поставит VLESS Reality, XHTTP, Hysteria2, TUIC, Sudoku и прокси для Telegram, настроит и добавит профили. Свой домен не нужен.</string>
     <string name="srv_list_title">Ваши серверы</string>
     <string name="srv_empty">Пока нет серверов, поднятых через Kombain.</string>
     <string name="srv_busy">Дождитесь окончания текущей операции</string>
@@ -948,4 +948,17 @@
     <string name="srv_ps_rot">%d имени сайта</string>
     <string name="srv_ps_hop">прыжки портов</string>
     <string name="srv_protect_old">Защита не включена — «Ещё» → «Защита от блокировок»</string>
+    <!-- Sudoku -->
+    <string name="sudoku_key">Ключ</string>
+    <string name="sudoku_ascii">Вид трафика</string>
+    <string name="sudoku_aead">Шифрование</string>
+    <string name="sudoku_mask">HTTP-маскировка</string>
+    <string name="sudoku_tables">Свои раскладки байтов (xpxvvpvv, через запятую)</string>
+    <string name="srv_p_sudoku">Sudoku — трафик похож на обычный текст (новый, только одиночный сервер)</string>
+    <string name="srv_m_sd_on">Включить Sudoku</string>
+    <string name="srv_m_sd_off">Выключить Sudoku</string>
+    <string name="srv_sd_msg">Sudoku — новый протокол из Китая: данные зашифровываются и упаковываются в головоломки судоку, поэтому в канале видны почти обычные печатные символы, а не «случайный шум», по которому ТСПУ узнаёт VPN. Работает по TCP, порт %d. У каждого пользователя появится профиль Sudoku.</string>
+    <string name="srv_sd_off_msg">Профили Sudoku на «%s» перестанут работать.</string>
+    <string name="srv_sd_yes">Включить</string>
+    <string name="srv_sd_off_yes">Выключить</string>
 </resources>

@@ -36,6 +36,7 @@ data class ServerNode(
     var xhPort: Int = 8443,
     var tuicPort: Int = 8443,
     var tgPort: Int = 9443,
+    var sdPort: Int = 8880,
     /** server-side random port change every N days, 0 = off */
     var autoPorts: Int = 0,
     /** protection against DPI freezes (see `harden` in kombain-node.sh) */
@@ -60,7 +61,7 @@ data class ServerNode(
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
         put("password", password); put("privateKey", privateKey); put("role", role); put("exitId", exitId)
         put("protocols", protocols); put("sni", sni); put("dest", dest); put("vpnPort", vpnPort); put("hyPort", hyPort)
-        put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort); put("autoPorts", autoPorts)
+        put("xhPort", xhPort); put("tuicPort", tuicPort); put("tgPort", tgPort); put("sdPort", sdPort); put("autoPorts", autoPorts)
         put("fp", fp); put("antifreeze", antifreeze); put("sniRotation", sniRotation); put("hop", hop)
         put("sniAlts", sniAlts); put("hyHop", hyHop)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
@@ -76,7 +77,7 @@ data class ServerNode(
             protocols = o.optString("protocols", "vless,hy2"), sni = o.optString("sni"), dest = o.optString("dest"),
             vpnPort = o.optInt("vpnPort", 443), hyPort = o.optInt("hyPort", 443),
             xhPort = o.optInt("xhPort", 8443), tuicPort = o.optInt("tuicPort", 8443),
-            tgPort = o.optInt("tgPort", 9443), autoPorts = o.optInt("autoPorts", 0),
+            tgPort = o.optInt("tgPort", 9443), sdPort = o.optInt("sdPort", 8880), autoPorts = o.optInt("autoPorts", 0),
             // servers added before 3.4 have none of the protection until it is switched on
             fp = o.optString("fp", "chrome"), antifreeze = o.optBoolean("antifreeze", false),
             sniRotation = o.optBoolean("sniRotation", false), hop = o.optBoolean("hop", false),
@@ -87,6 +88,7 @@ data class ServerNode(
     }
 
     val hasTelegram get() = "tg" in protocols.split(',')
+    val hasSudoku get() = "sudoku" in protocols.split(',')
 }
 
 object ServerStore {

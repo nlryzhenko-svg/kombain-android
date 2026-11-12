@@ -51,6 +51,7 @@ jobs:
         run: |
           [ -f app/libs/libcore.aar ] || ./run lib core
           [ -f app/executableSo/arm64-v8a/libxray.so ] || bash buildScript/lib/xray.sh
+          [ -f app/executableSo/arm64-v8a/libsudoku.so ] || bash buildScript/lib/sudoku.sh
       - name: Сборка APK для проверки
         if: steps.check.outputs.update == 'yes'
         env:
@@ -73,7 +74,7 @@ jobs:
           git config user.name "kombain-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$br"
-          git add buildScript/lib/core/get_source_env.sh buildScript/lib/xray.sh libcore/go.mod libcore/go.sum
+          git add buildScript/lib/core/get_source_env.sh buildScript/lib/xray.sh buildScript/lib/sudoku.sh libcore/go.mod libcore/go.sum
           git commit -m "Ядра: sing-box ${{ steps.core.outputs.core }}, Xray-core ${{ steps.core.outputs.xray }}"
           git push -f origin "$br"
           gh pr create --head "$br" --title "Обновление ядер: sing-box ${{ steps.core.outputs.core }}, Xray-core ${{ steps.core.outputs.xray }}" \

@@ -26,6 +26,9 @@ import java.io.File
 import io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean
 import io.nekohasekai.sagernet.fmt.v2ray.Xray
 import io.nekohasekai.sagernet.fmt.v2ray.buildXrayConfig
+import io.nekohasekai.sagernet.fmt.sudoku.Sudoku
+import io.nekohasekai.sagernet.fmt.sudoku.SudokuBean
+import io.nekohasekai.sagernet.fmt.sudoku.buildSudokuConfig
 
 abstract class BoxInstance(
     val profile: ProxyEntity
@@ -73,6 +76,11 @@ abstract class BoxInstance(
                     is NaiveBean -> {
                         initPlugin("naive-plugin")
                         pluginConfigs[port] = profile.type to bean.buildNaiveConfig(port)
+                    }
+
+                    is SudokuBean -> {
+                        if (!Sudoku.isAvailable()) error("Sudoku не входит в эту сборку для вашего процессора")
+                        pluginConfigs[port] = profile.type to bean.buildSudokuConfig(port)
                     }
 
                     is StandardV2RayBean -> if (bean.useXray()) {
@@ -146,6 +154,16 @@ abstract class BoxInstance(
                         )
 
                         processes.start(commands, envMap)
+                    }
+
+                    bean is SudokuBean -> {
+                        val configFile = File(
+                            cacheDir, "sudoku_" + SystemClock.elapsedRealtime() + ".json"
+                        )
+                        configFile.parentFile?.mkdirs()
+                        configFile.writeText(config)
+                        cacheFiles.add(configFile)
+                        processes.start(mutableListOf(Sudoku.executable().absolutePath, "-c", configFile.absolutePath))
                     }
 
                     bean is StandardV2RayBean && bean.useXray() -> {

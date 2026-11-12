@@ -208,7 +208,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     }
 
     private fun protoName(p: String) = when (p) {
-        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; else -> p
+        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; "sudoku" -> "Sudoku"; else -> p
     }
 
     fun askUser(s: ServerNode) {
@@ -244,6 +244,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         val entries = listOfNotNull(
             8 to getString(R.string.srv_m_protect),
             tgItem?.let { 4 to it },
+            if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
             5 to getString(R.string.srv_m_sni),
             6 to getString(R.string.srv_m_shuffle),
             if (s.role != "exit") 7 to getString(R.string.srv_m_auto_ports) else null,
@@ -255,6 +256,19 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .setTitle(s.name)
             .setItems(items) { _, pos ->
                 when (entries[pos].first) {
+                    9 -> if (s.hasSudoku) MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.srv_m_sd_off)
+                        .setMessage(getString(R.string.srv_sd_off_msg, s.name))
+                        .setPositiveButton(R.string.srv_sd_off_yes) { _, _ -> Deployer.disableSudoku(s); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    else MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.srv_m_sd_on)
+                        .setMessage(getString(R.string.srv_sd_msg, s.sdPort))
+                        .setPositiveButton(R.string.srv_sd_yes) { _, _ -> Deployer.enableSudoku(s); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+
                     8 -> ProtectionDialog.show(requireContext(), s) { af, fp, rot, hop ->
                         Deployer.harden(s, af, fp, rot, hop); scrollTop()
                     }
@@ -355,7 +369,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     private fun askPorts(s: ServerNode) {
         val ctx = requireContext()
         val protos = s.protocols.split(',').toMutableList().apply { if ("vless" !in this) add(0, "vless") }
-        val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort, "tg" to s.tgPort)
+        val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort, "tg" to s.tgPort, "sudoku" to s.sdPort)
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp2px(22), dp2px(4), dp2px(22), 0)

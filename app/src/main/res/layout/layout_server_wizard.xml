@@ -118,6 +118,13 @@
                         android:text="@string/srv_p_tuic" />
 
                     <com.google.android.material.checkbox.MaterialCheckBox
+                        android:id="@+id/p_sudoku"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:text="@string/srv_p_sudoku" />
+
+                    <com.google.android.material.checkbox.MaterialCheckBox
                         android:id="@+id/p_tg"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

@@ -136,3 +136,19 @@ Keystore. На сервере: `/etc/kombain`, `/usr/local/bin/kombain-{xray,hys
   (nftables, иначе iptables; служба `kombain-hop`), в ссылке `mport=A-B`.
 - **Белые списки**: `kombain/Whitelist.kt` проверяет IP и сайт маскировки входного сервера
   по спискам ancored/ru-mobile-whitelist (копия в APK, свежая скачивается раз в 3 дня).
+
+## Sudoku (с 3.5.0)
+
+[Sudoku](https://github.com/SUDOKU-ASCII/sudoku) кодирует трафик головоломками судоку 4×4:
+в канале печатные символы / низкая энтропия вместо «случайного шума».
+
+- Сервер: `kombain-node.sh install --protocols …,sudoku [--sd-port 8880]` или `enable-sudoku` / `disable-sudoku`.
+  Бинарник — официальный релиз `sudoku-linux-{amd64,arm64}`, служба `kombain-sudoku`. У сервера
+  мастер-ключ, у каждого пользователя свой ключ (`sudoku -keygen -more`), сервер пускает только их
+  (`users`). Неудачное рукопожатие уходит на `SNI:80`. Только одиночный сервер (в каскаде не умеет
+  отдавать трафик выходному).
+- Ссылки: `sudoku://<base64url JSON>` — формат официальных клиентов.
+- Клиент: `buildScript/lib/sudoku.sh` собирает `libsudoku.so` (версия закреплена, обновляется
+  `update-core.sh`); `fmt/sudoku/*` — профиль, процесс запускается как движок Xray: локальный
+  SOCKS-прокси для sing-box, к серверу ходит через mapping-вход sing-box. В сборке выключен
+  встроенный в клиент список блокировки рекламы (маршрутизирует sing-box).

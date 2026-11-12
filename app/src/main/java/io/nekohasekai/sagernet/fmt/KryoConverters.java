@@ -102,6 +102,12 @@ public class KryoConverters {
     }
 
     @TypeConverter
+    public static io.nekohasekai.sagernet.fmt.sudoku.SudokuBean sudokuDeserialize(byte[] bytes) {
+        if (JavaUtil.isEmpty(bytes)) return null;
+        return deserialize(new io.nekohasekai.sagernet.fmt.sudoku.SudokuBean(), bytes);
+    }
+
+    @TypeConverter
     public static MieruBean mieruDeserialize(byte[] bytes) {
         if (JavaUtil.isEmpty(bytes)) return null;
         return deserialize(new MieruBean(), bytes);

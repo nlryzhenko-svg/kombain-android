@@ -333,6 +333,32 @@
         <item>TPROXY</item>
     </string-array>
 
+    <string-array name="sudoku_ascii_value">
+        <item>prefer_entropy</item>
+        <item>prefer_ascii</item>
+        <item>up_ascii_down_entropy</item>
+        <item>up_entropy_down_ascii</item>
+    </string-array>
+    <string-array name="sudoku_ascii_entry">
+        <item>Низкая энтропия (рекомендуется)</item>
+        <item>Печатные символы (как текст)</item>
+        <item>Туда текст, обратно низкая энтропия</item>
+        <item>Туда низкая энтропия, обратно текст</item>
+    </string-array>
+    <string-array name="sudoku_aead_value">
+        <item>chacha20-poly1305</item>
+        <item>aes-128-gcm</item>
+        <item>none</item>
+    </string-array>
+    <string-array name="sudoku_mask_value">
+        <item>ws</item>
+        <item>auto</item>
+        <item>stream</item>
+        <item>poll</item>
+        <item>legacy</item>
+        <item>off</item>
+    </string-array>
+
     <string-array name="mieru_protocol">
         <item>TCP</item>
         <item>UDP</item>

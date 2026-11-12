@@ -11,6 +11,7 @@ if [ -z "${KEYSTORE_BASE64:-}" ]; then
 fi
 [ -f app/libs/libcore.aar ] || { echo "::error::нет app/libs/libcore.aar (ядро sing-box)"; exit 1; }
 [ -f app/executableSo/arm64-v8a/libxray.so ] || { echo "::error::нет libxray.so (Xray-core)"; exit 1; }
+[ -f app/executableSo/arm64-v8a/libsudoku.so ] || { echo "::error::нет libsudoku.so (Sudoku)"; exit 1; }
 echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
 {
   echo "sdk.dir=$ANDROID_HOME"

@@ -4,7 +4,7 @@
 #
 #   kombain-node.sh install  --host IP [--role single|entry] [--protocols vless,xhttp,hy2,tuic]
 #                            [--sni www.microsoft.com] [--port 443] [--xh-port 8443] [--hy-port 443]
-#                            [--tuic-port 8443] [--tg-port 9443] [--name "Мой сервер"] [--user "Телефон"]
+#                            [--tuic-port 8443] [--tg-port 9443] [--sd-port 8880] [--name "Мой сервер"] [--user "Телефон"]
 #                            [--bridge] [--exit-link vless://...]
 #                            [--fp firefox] [--antifreeze 1] [--sni-rotation 1] [--hop 0]
 #   kombain-node.sh add-user NAME | remove-user NAME
@@ -15,6 +15,7 @@
 #                          new Reality keys, paths, passwords and user ids (old links stop working)
 #   kombain-node.sh set-exit --exit-link vless://...   (entry node: point to a new exit)
 #   kombain-node.sh enable-telegram [--tg-port N] | disable-telegram
+#   kombain-node.sh enable-sudoku [--sd-port N] | disable-sudoku
 #   kombain-node.sh find-sni [--host IP]     sites next to the server that suit Reality (KB_SNI <base64 JSON>)
 #   kombain-node.sh set-sni --sni DOMAIN [--dest IP:443]   switch the masking site, keys stay
 #   kombain-node.sh ensure-sub                subscription links for every user (HTTPS, pinned self-signed cert)
@@ -30,7 +31,9 @@
 #                            hop          — Hysteria2 port hopping over a range of 1000 UDP ports
 #   kombain-node.sh uninstall
 #
-# Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody).
+# Protocols: vless, xhttp, hy2, tuic, tg (Telegram proxy: one tg:// link for everybody),
+#            sudoku (github.com/SUDOKU-ASCII/sudoku: traffic encoded as Sudoku puzzles — low-entropy,
+#            looks like plain text; single nodes only, it can't hand traffic to a cascade's exit).
 # Roles:
 #   single — standalone node: clients exit to the internet from here.
 #   entry  — first hop of a cascade: clients connect here, traffic leaves through the
@@ -59,6 +62,7 @@ XRAY_URL_BASE=${XRAY_URL_BASE:-https://github.com/XTLS/Xray-core/releases/latest
 HY_URL_BASE=${HY_URL_BASE:-https://github.com/apernet/hysteria/releases/latest/download}
 SB_REPO=${SB_REPO:-https://github.com/SagerNet/sing-box}
 MTG_REPO=${MTG_REPO:-https://github.com/9seconds/mtg}
+SD_URL_BASE=${SD_URL_BASE:-https://github.com/SUDOKU-ASCII/sudoku/releases/latest/download}
 
 step() { echo "KB_STEP $*"; }
 die() { echo "KB_ERROR $*"; exit 1; }
@@ -79,12 +83,13 @@ load_state() {
   TG_PORT=${TG_PORT:-9443}; TG_SECRET=${TG_SECRET:-}; DEST=${DEST:-}; SUB_PORT=${SUB_PORT:-}; AUTO_PORTS=${AUTO_PORTS:-0}
   FP=${FP:-firefox}; ANTIFREEZE=${ANTIFREEZE:-0}; XH_DEC=${XH_DEC:-}; XH_ENC=${XH_ENC:-}
   SNI_ROT=${SNI_ROT:-0}; SNI_ALTS=${SNI_ALTS:-}; HY_HOP=${HY_HOP:-}
+  SD_PORT=${SD_PORT:-8880}; SD_PUB=${SD_PUB:-}; SD_MPRIV=${SD_MPRIV:-}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -154,7 +159,52 @@ download_binaries() {
   fi
   rm -rf "$tmp"
   if has_proto tg; then download_mtg; fi
+  if has_proto sudoku; then download_sudoku; fi
   return 0
+}
+
+download_sudoku() {
+  [ "$KB_DOWNLOAD" = 1 ] || return 0
+  [ -x "$KB_BIN/kombain-sudoku" ] && return 0
+  detect_arch
+  case $SB_ARCH in amd64|arm64) ;; *) die "для Sudoku нет сборки под $(uname -m)" ;; esac
+  step "Скачиваю Sudoku"
+  local tmp; tmp=$(mktemp -d)
+  curl -fsSL --retry 3 -o "$tmp/sd.tgz" "$SD_URL_BASE/sudoku-linux-$SB_ARCH.tar.gz" || die "не удалось скачать Sudoku"
+  tar -xzf "$tmp/sd.tgz" -C "$tmp"
+  install -m 755 "$tmp/sudoku" "$KB_BIN/kombain-sudoku"
+  rm -rf "$tmp"
+}
+
+# Sudoku keys: the server holds the master public key, every user gets its own client key split from the
+# master private key (the server's whitelist tells users apart). Kept in $KB_DIR/sudoku.keys as "name|key".
+sd_out() { "$KB_BIN/kombain-sudoku" "$@" 2>&1 || true; }
+
+sd_keygen() {
+  local out; out=$(sd_out -keygen)
+  SD_MPRIV=$(echo "$out" | sed -n 's/.*Master Private Key: *//p' | tr -d ' \r')
+  SD_PUB=$(echo "$out" | sed -n 's/.*Master Public Key: *//p' | tr -d ' \r')
+  [ -n "$SD_MPRIV" ] && [ -n "$SD_PUB" ] || die "не удалось создать ключи Sudoku"
+  : > "$KB_DIR/sudoku.keys"; chmod 600 "$KB_DIR/sudoku.keys"
+}
+
+sd_user_key() { # name -> client key (created on first use)
+  local f="$KB_DIR/sudoku.keys" k
+  k=$(awk -F'|' -v n="$1" '$1 == n {print $2; exit}' "$f" 2>/dev/null || true)
+  if [ -z "$k" ]; then
+    k=$(sd_out -keygen -more "$SD_MPRIV" | sed -n 's/.*Split Private Key: *//p' | tr -d ' \r')
+    [ -n "$k" ] || die "не удалось создать ключ Sudoku для «$1»"
+    printf '%s|%s\n' "$1" "$k" >> "$f"; chmod 600 "$f"
+  fi
+  echo "$k"
+}
+
+b64url() { base64 | tr -d '\n=' | tr '+/' '-_'; }
+
+sd_link() { # name label -> sudoku:// short link (the format of the official clients)
+  local k; k=$(sd_user_key "$1")
+  printf '{"n":"%s","h":"%s","p":%s,"k":"%s","a":"entropy","e":"chacha20-poly1305","hm":"ws"}' \
+    "$(json_str "$2")" "$HOST" "$SD_PORT" "$k" | b64url | sed 's/^/sudoku:\/\//'
 }
 
 latest_tag() { # repo url -> vX.Y.Z (the releases/latest redirect, then the API)
@@ -504,6 +554,34 @@ EOF
   return 0
 }
 
+render_sudoku() {
+  has_proto sudoku || { rm -f "$KB_DIR/sudoku.json" "$KB_DIR/sudoku.keys"; return 0; }
+  [ -n "$SD_PUB" ] && [ -n "$SD_MPRIV" ] || sd_keygen
+  local users="" first=1 name k fallback
+  # keys of removed users go away
+  if [ -f "$KB_DIR/sudoku.keys" ]; then
+    local tmp; tmp=$(mktemp)
+    awk -F'|' 'NR == FNR {keep[$1] = 1; next} keep[$1]' "$(users_file)" "$KB_DIR/sudoku.keys" > "$tmp" || true
+    cat "$tmp" > "$KB_DIR/sudoku.keys"; rm -f "$tmp"
+  fi
+  while IFS='|' read -r name _; do
+    [ -n "$name" ] || continue
+    k=$(sd_user_key "$name")
+    [ $first = 1 ] || users+=","; first=0
+    users+=$(printf '{"alias":"%s","key":"%s"}' "$(json_str "$name")" "$k")
+  done < "$(users_file)"
+  # a probe that fails the handshake gets the masking site's plain HTTP answer
+  fallback="$SNI:80"; [ "$KB_TEST" = 1 ] && fallback="127.0.0.1:80"
+  cat > "$KB_DIR/sudoku.json" <<EOF
+{"mode": "server", "transport": "tcp", "local_port": $SD_PORT, "fallback_address": "$fallback",
+ "key": "$SD_PUB", "aead": "chacha20-poly1305", "suspicious_action": "fallback",
+ "padding_min": 5, "padding_max": 15, "ascii": "prefer_entropy", "enable_pure_downlink": true,
+ "multiplex": "off", "httpmask": {"disable": false, "mode": "auto"},
+ "users": [$users]}
+EOF
+  chmod 600 "$KB_DIR/sudoku.json"
+}
+
 render_mtg() {
   has_proto tg || { rm -f "$KB_DIR/mtg.toml"; return 0; }
   [ -n "$TG_SECRET" ] || new_tg_secret
@@ -569,6 +647,21 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 EOF
   fi
+  if has_proto sudoku; then
+    cat > /etc/systemd/system/kombain-sudoku.service <<EOF
+[Unit]
+Description=Kombain Sudoku
+After=network-online.target
+[Service]
+WorkingDirectory=$KB_DIR
+ExecStart=$KB_BIN/kombain-sudoku -c $KB_DIR/sudoku.json
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
   if has_proto tg; then
     cat > /etc/systemd/system/kombain-mtg.service <<EOF
 [Unit]
@@ -604,9 +697,9 @@ EOF
   systemctl daemon-reload
 }
 
-svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; has_proto tg && echo mtg; [ -n "$SUB_PORT" ] && echo sub; return 0; }
+svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; has_proto sudoku && echo sudoku; has_proto tg && echo mtg; [ -n "$SUB_PORT" ] && echo sub; return 0; }
 
-svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; sub) echo Подписка ;; esac; }
+svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; sudoku) echo Sudoku ;; sub) echo Подписка ;; esac; }
 
 restart_services() {
   [ "$KB_SYSTEMD" = 1 ] || return 0
@@ -623,7 +716,7 @@ restart_services() {
     systemctl is-active --quiet "kombain-$s" || die "$(svc_title "$s") не запустился: $(journalctl -u "kombain-$s" -n 5 --no-pager | tail -3 | tr '\n' ' ')"
   done
   # services of protocols that were switched off
-  for s in hysteria tuic mtg sub; do
+  for s in hysteria tuic sudoku mtg sub; do
     svc_list | grep -qx "$s" || systemctl disable --now "kombain-$s" >/dev/null 2>&1 || true
   done
   return 0
@@ -639,6 +732,7 @@ open_firewall() {
     has_proto hy2 && [ -n "${HY_HOP:-}" ] && ufw allow "${HY_HOP/-/:}/udp" >/dev/null
     has_proto tuic && ufw allow "$TUIC_PORT/udp" >/dev/null
     has_proto tg && ufw allow "$TG_PORT/tcp" >/dev/null
+    has_proto sudoku && ufw allow "$SD_PORT/tcp" >/dev/null
     [ -n "$SUB_PORT" ] && ufw allow "$SUB_PORT/tcp" >/dev/null
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
     step "Открываю порты в firewalld"
@@ -648,6 +742,7 @@ open_firewall() {
     has_proto hy2 && [ -n "${HY_HOP:-}" ] && firewall-cmd -q --permanent --add-port="$HY_HOP/udp"
     has_proto tuic && firewall-cmd -q --permanent --add-port="$TUIC_PORT/udp"
     has_proto tg && firewall-cmd -q --permanent --add-port="$TG_PORT/tcp"
+    has_proto sudoku && firewall-cmd -q --permanent --add-port="$SD_PORT/tcp"
     [ -n "$SUB_PORT" ] && firewall-cmd -q --permanent --add-port="$SUB_PORT/tcp"
     firewall-cmd -q --reload
   fi
@@ -688,6 +783,9 @@ user_links() { # name uuid hypass index -> "proto link" lines
     label=$(urlenc "$NAME · $name · TUIC")
     echo "tuic tuic://$uuid:$hypass@$h:$TUIC_PORT?sni=$SNI&alpn=h3&congestion_control=bbr&udp_relay_mode=native&allow_insecure=1#$label"
   fi
+  if has_proto sudoku; then
+    echo "sudoku $(sd_link "$name" "$NAME · $name · Sudoku")"
+  fi
   if has_proto hy2; then
     label=$(urlenc "$NAME · $name · Hysteria2")
     echo "hy2 hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS${HY_HOP:+&mport=$HY_HOP}#$label"
@@ -721,9 +819,9 @@ print_result() {
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s"}' \
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s","sdPort":%s}' \
     "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}" \
-    "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}")
+    "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}" "$SD_PORT")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
@@ -750,7 +848,7 @@ render_sub() {
   done < "$(users_file)"
 }
 
-render_all() { render_xray; render_hysteria; render_hop; render_tuic; render_mtg; render_sub; write_units; }
+render_all() { render_xray; render_hysteria; render_hop; render_tuic; render_sudoku; render_mtg; render_sub; write_units; }
 
 check_ports() {
   [ "$PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты VLESS и XHTTP должны различаться"
@@ -759,12 +857,21 @@ check_ports() {
     [ "$TG_PORT" != "$PORT" ] || die "порты VLESS и Telegram должны различаться"
     [ "$TG_PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты XHTTP и Telegram должны различаться"
   fi
+  if has_proto sudoku; then
+    [ "$ROLE" != entry ] || die "Sudoku работает только на одиночном сервере: в каскаде он не умеет передавать трафик выходному"
+    local x
+    for x in "$PORT" "$TG_PORT" "${SUB_PORT:-0}"; do
+      [ "$SD_PORT" != "$x" ] || die "порт Sudoku $SD_PORT уже занят другим протоколом"
+    done
+    [ "$SD_PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты XHTTP и Sudoku должны различаться"
+  fi
   return 0
 }
 
 cmd_install() {
   ROLE=single; HOST=""; PROTOCOLS="vless,xhttp,hy2"; SNI="www.microsoft.com"; PORT=443; HY_PORT=443
   XH_PORT=8443; TUIC_PORT=8443; TG_PORT=9443; TG_SECRET=""; DEST=""; SUB_PORT=$((20000 + RANDOM % 40000))
+  SD_PORT=8880; SD_PUB=""; SD_MPRIV=""
   NAME="Kombain"; local first_user="Телефон" bridge=0 exit_link="" hop=0
   FP=firefox; ANTIFREEZE=1; SNI_ROT=1; SNI_ALTS=""; HY_HOP=""
   while [ $# -gt 0 ]; do
@@ -778,6 +885,7 @@ cmd_install() {
       --hy-port) HY_PORT=$2; shift 2 ;;
       --tuic-port) TUIC_PORT=$2; shift 2 ;;
       --tg-port) TG_PORT=$2; shift 2 ;;
+      --sd-port) SD_PORT=$2; shift 2 ;;
       --dest) DEST=$2; shift 2 ;;
       --sub-port) SUB_PORT=$2; shift 2 ;;
       --name) NAME=$2; shift 2 ;;
@@ -807,6 +915,7 @@ cmd_install() {
   gen_keys
   [ $bridge = 1 ] && BRIDGE_UUID=$("$KB_BIN/kombain-xray" uuid) || BRIDGE_UUID=""
   new_user_line "$first_user" > "$(users_file)"; chmod 600 "$(users_file)"
+  rm -f "$KB_DIR/sudoku.keys"
   rm -f "$KB_DIR/sub.crt" "$KB_DIR/sub.key"
   [ "$SNI_ROT" = 1 ] && find_sni_alts
   [ "$hop" = 1 ] && has_proto hy2 && HY_HOP=$(pick_hop)
@@ -897,6 +1006,7 @@ cmd_rotate() {
       --hy-port) HY_PORT=$2; shift 2 ;;
       --tuic-port) TUIC_PORT=$2; shift 2 ;;
       --tg-port) TG_PORT=$2; shift 2 ;;
+      --sd-port) SD_PORT=$2; shift 2 ;;
       --sni) SNI=$2; DEST=""; shift 2 ;;
       --dest) DEST=$2; shift 2 ;;
       *) die "неизвестный параметр $1" ;;
@@ -914,6 +1024,8 @@ cmd_rotate() {
   done < "$(users_file)" > "$tmp"
   cat "$tmp" > "$(users_file)"; rm -f "$tmp"
   rm -f "$KB_DIR/hy.crt" "$KB_DIR/hy.key"
+  SD_PUB=""; SD_MPRIV=""   # render_sudoku makes new ones
+  render_sudoku
   save_state
   render_all; open_firewall; restart_services
   step "Ключи заменены — старые ссылки больше не работают"
@@ -948,6 +1060,37 @@ cmd_enable_telegram() {
   step "Настраиваю прокси для Telegram"
   render_all; open_firewall; restart_services
   step "Прокси для Telegram включён"
+  print_result
+}
+
+cmd_enable_sudoku() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --sd-port) SD_PORT=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  has_proto sudoku || PROTOCOLS="$PROTOCOLS,sudoku"
+  check_ports
+  download_sudoku
+  step "Настраиваю Sudoku"
+  render_sudoku
+  save_state
+  render_all; open_firewall; restart_services
+  step "Sudoku включён — у каждого пользователя появилась ссылка sudoku://"
+  print_result
+}
+
+cmd_disable_sudoku() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  PROTOCOLS=$(echo ",$PROTOCOLS," | sed 's/,sudoku,/,/g; s/^,//; s/,$//')
+  save_state
+  render_all; restart_services
+  close_ports "$SD_PORT/tcp"
+  step "Sudoku выключен"
   print_result
 }
 
@@ -1094,25 +1237,28 @@ cmd_shuffle_ports() {
   if has_proto xhttp; then old+=("$XH_PORT/tcp"); new_xh=$(pick_port "$new_vless"); fi
   if has_proto hy2; then old+=("$HY_PORT/udp"); new_hy=$(pick_port "$new_vless" "$new_xh"); fi
   if has_proto tuic; then old+=("$TUIC_PORT/udp"); new_tuic=$(pick_port "$new_vless" "$new_xh" "$new_hy"); fi
+  local new_sd=""
+  if has_proto sudoku; then old+=("$SD_PORT/tcp"); new_sd=$(pick_port "$new_vless" "$new_xh" "$new_hy" "$new_tuic"); fi
   PORT=$new_vless
   [ -n "$new_xh" ] && XH_PORT=$new_xh
   [ -n "$new_hy" ] && HY_PORT=$new_hy
   [ -n "$new_tuic" ] && TUIC_PORT=$new_tuic
+  [ -n "$new_sd" ] && SD_PORT=$new_sd
   if [ -n "$HY_HOP" ] && has_proto hy2; then old+=("$HY_HOP/udp"); HY_HOP=""; HY_HOP=$(pick_hop); fi
   save_state
-  step "Новые порты: VLESS $PORT${new_xh:+, XHTTP $XH_PORT}${new_hy:+, Hysteria2 $HY_PORT}${new_tuic:+, TUIC $TUIC_PORT}${HY_HOP:+, прыжки $HY_HOP}"
+  step "Новые порты: VLESS $PORT${new_xh:+, XHTTP $XH_PORT}${new_hy:+, Hysteria2 $HY_PORT}${new_tuic:+, TUIC $TUIC_PORT}${new_sd:+, Sudoku $SD_PORT}${HY_HOP:+, прыжки $HY_HOP}"
   # Telegram proxy and the subscription server keep running untouched
-  render_xray; render_hysteria; render_hop; render_tuic; render_sub
+  render_xray; render_hysteria; render_hop; render_tuic; render_sudoku; render_sub; write_units
   if [ "$KB_SYSTEMD" = 1 ]; then
     open_firewall
     apply_hop
     local s
-    for s in xray hysteria tuic; do
+    for s in xray hysteria tuic sudoku; do
       svc_list | grep -qx "$s" || continue
       systemctl restart "kombain-$s"
     done
     sleep 2
-    for s in xray hysteria tuic; do
+    for s in xray hysteria tuic sudoku; do
       svc_list | grep -qx "$s" || continue
       systemctl is-active --quiet "kombain-$s" || die "$(svc_title "$s") не запустился: $(journalctl -u "kombain-$s" -n 5 --no-pager | tail -3 | tr '\n' ' ')"
     done
@@ -1229,14 +1375,15 @@ cmd_uninstall() {
   if [ "$KB_SYSTEMD" = 1 ]; then
     systemctl disable --now kombain-hop >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-hop.service
-    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-mtg kombain-sub kombain-ports.timer >/dev/null 2>&1 || true
+    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-sudoku kombain-mtg kombain-sub kombain-ports.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-sudoku.service
     rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
     rm -f /etc/systemd/system/kombain-xray.service /etc/systemd/system/kombain-hysteria.service \
       /etc/systemd/system/kombain-tuic.service /etc/systemd/system/kombain-mtg.service \
       /etc/systemd/system/kombain-sub.service /etc/sysctl.d/99-kombain.conf
     systemctl daemon-reload
   fi
-  rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg"
+  rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg" "$KB_BIN/kombain-sudoku"
   step "Kombain удалён с сервера"
 }
 
@@ -1256,6 +1403,8 @@ case ${1-} in
   set-exit) shift; cmd_set_exit "$@" ;;
   enable-telegram) shift; cmd_enable_telegram "$@" ;;
   disable-telegram) cmd_disable_telegram ;;
+  enable-sudoku) shift; cmd_enable_sudoku "$@" ;;
+  disable-sudoku) cmd_disable_sudoku ;;
   find-sni) shift; cmd_find_sni "$@" ;;
   set-sni) shift; cmd_set_sni "$@" ;;
   ensure-sub) cmd_ensure_sub ;;
@@ -1263,5 +1412,5 @@ case ${1-} in
   auto-ports) shift; cmd_auto_ports "$@" ;;
   harden) shift; cmd_harden "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | uninstall" ;;
 esac

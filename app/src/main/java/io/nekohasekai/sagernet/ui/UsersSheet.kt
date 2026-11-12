@@ -35,7 +35,7 @@ object UsersSheet {
     }
 
     private fun protoName(p: String) = when (p) {
-        "vless" -> "VLESS Reality"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; else -> p
+        "vless" -> "VLESS Reality"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "sudoku" -> "Sudoku"; else -> p
     }
 
     private fun render(f: MyServersFragment, node: ServerNode, json: JSONObject) {
