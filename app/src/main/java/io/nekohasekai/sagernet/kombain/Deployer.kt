@@ -294,30 +294,11 @@ object Deployer {
     }
 
     /** Sites next to the server that suit Reality (no changes on the server). */
-    fun findSites(node: ServerNode, done: (org.json.JSONArray?) -> Unit) {
-        if (!start("Ищу сайт для маскировки рядом с ${node.name}")) return
+    /** Sites next to the server for the masking choice; read-only, so not shown as a server operation. */
+    fun scanSites(node: ServerNode, done: (org.json.JSONArray?, String?) -> Unit) {
         runOnDefaultDispatcher {
-            val r = ssh(node).run(listOf("find-sni", "--host", node.host.trim()))
-            ServerStore.upsert(node)
-            val n = r.sites?.length() ?: 0
-            if (r.sites == null) finish(false, r.error ?: "не удалось проверить")
-            else finish(true, if (n > 0) "Найдено подходящих сайтов: $n — выберите один." else "Рядом подходящих сайтов нет — оставьте текущий.")
-            onMainDispatcher { done(r.sites) }
-        }
-    }
-
-    fun setSite(node: ServerNode, domain: String, dest: String) {
-        if (!start("Новый сайт для маскировки на ${node.name}")) return
-        runOnDefaultDispatcher {
-            val args = mutableListOf("set-sni", "--sni", domain)
-            if (dest.isNotBlank()) args += listOf("--dest", dest)
-            val r = ssh(node).run(args)
-            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить")
-            syncInfo(node, r.json)
-            val n = if (node.role != "exit") importLinks(node, groupName(node), r.json, replace = true) else 0
-            ServerStore.upsert(node)
-            finish(true, if (node.role == "exit") "Маскировка сменена." else
-                "Маскировка: $domain. Профили обновлены ($n), у остальных устройств подписка обновится сама.")
+            val r = SshRunner(node) { }.run(listOf("find-sni", "--host", node.host.trim()))
+            onMainDispatcher { done(r.sites, r.error) }
         }
     }
 
@@ -346,12 +327,16 @@ object Deployer {
     }
 
     /** Protection against DPI freezes: XHTTP hardening, TLS fingerprint, rotation of site names, port hopping. */
-    fun harden(node: ServerNode, antifreeze: Boolean, fp: String, sniRotation: Boolean, hop: Boolean) {
+    fun harden(node: ServerNode, antifreeze: Boolean, fp: String, sniRotation: Boolean, hop: Boolean, site: Pair<String, String>? = null) {
         if (!start("Защита от блокировок на ${node.name}")) return
         runOnDefaultDispatcher {
             val args = mutableListOf("harden", "--antifreeze", if (antifreeze) "on" else "off", "--fp", fp,
                 "--sni-rotation", if (sniRotation) "on" else "off")
             if (node.protocols.split(',').contains("hy2")) args += listOf("--hop", if (hop) "on" else "off")
+            if (site != null) {
+                args += listOf("--sni", site.first)
+                if (site.second.isNotBlank()) args += listOf("--dest", site.second)
+            }
             val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
             syncInfo(node, r.json)

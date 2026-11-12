@@ -291,8 +291,9 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                     10 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
                     else (activity as? MainActivity)?.displayFragment(ServerMoveFragment.of(s))
 
-                    8 -> ProtectionDialog.show(requireContext(), s, onPickSite = { handle(5) }) { af, fp, rot, hop ->
-                        Deployer.harden(s, af, fp, rot, hop); scrollTop()
+                    8 -> ProtectionDialog.show(requireContext(), s, scan = { done -> Deployer.scanSites(s, done) }) { af, fp, rot, hop, site ->
+                        if (Deployer.running) snackbar(R.string.srv_busy).show()
+                        else { Deployer.harden(s, af, fp, rot, hop, site); scrollTop() }
                     }
 
                     11 -> {
@@ -329,20 +330,6 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                             .show()
                     }
 
-                    5 -> {
-                        Deployer.findSites(s) { sites ->
-                            if (!isAdded) return@findSites
-                            SitePicker.show(requireContext(), sites, s.sni, markWhitelist = s.role == "entry") { domain, dest ->
-                                MaterialAlertDialogBuilder(requireContext())
-                                    .setTitle(R.string.srv_m_sni)
-                                    .setMessage(getString(R.string.srv_sni_apply_msg, domain))
-                                    .setPositiveButton(R.string.srv_sni_apply) { _, _ -> Deployer.setSite(s, domain, dest); scrollTop() }
-                                    .setNegativeButton(android.R.string.cancel, null)
-                                    .show()
-                            }
-                        }
-                        scrollTop()
-                    }
                     4 -> if (s.hasTelegram) MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_tg_off)
                         .setMessage(getString(R.string.srv_tg_off_msg, s.name))

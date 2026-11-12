@@ -48,37 +48,23 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
     private val picked = HashMap<Int, Pair<String, String>>()
 
     private fun pickSite(form: View) {
-        val host = form.f(R.id.f_host).text.toString().trim()
-        val pass = form.f(R.id.f_pass).text.toString()
-        val key = form.f(R.id.f_key).text.toString().trim()
-        if (host.isEmpty() || (pass.isEmpty() && key.isEmpty())) {
-            snackbar(R.string.srv_sni_need).show(); return
-        }
-        val node = ServerNode(
-            host = host, sshPort = form.f(R.id.f_port).text.toString().toIntOrNull() ?: 22,
-            user = form.f(R.id.f_user).text.toString().trim().ifEmpty { "root" }, password = pass, privateKey = key,
-        )
-        val wait = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-            .setMessage(R.string.srv_sni_searching)
-            .setCancelable(false)
-            .show()
-        val log = StringBuilder()
-        io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher {
-            val r = io.nekohasekai.sagernet.kombain.SshRunner(node) { synchronized(log) { log.appendLine(it) } }
-                .run(listOf("find-sni", "--host", host))
-            io.nekohasekai.sagernet.ktx.onMainDispatcher {
-                wait.dismiss()
-                if (!isAdded) return@onMainDispatcher
-                if (r.sites == null) {
-                    snackbar(r.error ?: getString(R.string.srv_log_fail)).show()
-                    return@onMainDispatcher
+        SitePicker.show(requireContext(), form.f(R.id.f_sni).text.toString().trim(),
+            markWhitelist = cascade && form.id == entry.id,
+            scan = { done ->
+                val host = form.f(R.id.f_host).text.toString().trim()
+                val pass = form.f(R.id.f_pass).text.toString()
+                val key = form.f(R.id.f_key).text.toString().trim()
+                if (host.isEmpty() || (pass.isEmpty() && key.isEmpty())) done(null, getString(R.string.srv_sp_need))
+                else {
+                    val node = ServerNode(
+                        host = host, sshPort = form.f(R.id.f_port).text.toString().toIntOrNull() ?: 22,
+                        user = form.f(R.id.f_user).text.toString().trim().ifEmpty { "root" }, password = pass, privateKey = key,
+                    )
+                    io.nekohasekai.sagernet.kombain.Deployer.scanSites(node, done)
                 }
-                SitePicker.show(requireContext(), r.sites, form.f(R.id.f_sni).text.toString(),
-                    markWhitelist = cascade && form.id == entry.id) { domain, dest ->
-                    form.f(R.id.f_sni).setText(domain)
-                    picked[form.id] = domain to dest
-                }
-            }
+            }) { domain, dest ->
+            form.f(R.id.f_sni).setText(domain)
+            picked[form.id] = domain to dest
         }
     }
 

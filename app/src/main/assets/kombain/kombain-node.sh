@@ -1140,6 +1140,16 @@ probe_site() {
   echo "$ip $domain $(( (t1 - t0) / 1000000 ))"
 }
 
+# a masking site must speak TLS 1.3 with HTTP/2 and show a valid certificate for its name
+check_site() { # name host:port
+  local target=${KB_REALITY_TARGET:-$2} out verify=-verify_return_error
+  [ "$KB_TEST" = 1 ] && verify=""  # the test site has a self-signed certificate
+  step "Проверяю сайт $1"
+  out=$(timeout 8 openssl s_client -connect "$target" -servername "$1" -tls1_3 -alpn h2 $verify </dev/null 2>/dev/null) \
+    || die "сайт $1 не отвечает по TLS 1.3 с сервера или у него неверный сертификат — выберите другой"
+  echo "$out" | grep -q "ALPN protocol: h2" || die "сайт $1 не поддерживает HTTP/2 — для маскировки он не годится, выберите другой"
+}
+
 cmd_find_sni() {
   local ip="" net
   while [ $# -gt 0 ]; do
@@ -1181,6 +1191,7 @@ cmd_set_sni() {
     esac
   done
   [ -n "$sni" ] || die "укажите --sni"
+  check_site "$sni" "${dest:-$sni:443}"
   SNI=$sni; DEST=$dest
   if [ "$SNI_ROT" = 1 ]; then find_sni_alts; else SNI_ALTS=""; fi
   # the Telegram secret and the self-signed certificates carry the site name
@@ -1343,9 +1354,11 @@ EOF
 cmd_harden() {
   load_state
   [ "$KB_SYSTEMD" = 1 ] && need_root
-  local af="" fp="" rot="" hop="" old_hop
+  local af="" fp="" rot="" hop="" old_hop sni="" dest="" site_changed=0
   while [ $# -gt 0 ]; do
     case $1 in
+      --sni) sni=$2; shift 2 ;;
+      --dest) dest=$2; shift 2 ;;
       --antifreeze) af=$2; shift 2 ;;
       --fp) fp=$2; shift 2 ;;
       --sni-rotation) rot=$2; shift 2 ;;
@@ -1355,6 +1368,14 @@ cmd_harden() {
   done
   onoff() { case $1 in on|1|yes) echo 1 ;; off|0|no) echo 0 ;; *) die "ожидается on или off" ;; esac; }
   old_hop=$HY_HOP
+  if [ -n "$sni" ] && [ "$sni" != "$SNI" ]; then
+    [[ $sni =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] || die "«$sni» не похоже на адрес сайта"
+    check_site "$sni" "${dest:-$sni:443}"
+    SNI=$sni; DEST=$dest; site_changed=1
+    has_proto tg && new_tg_secret
+    rm -f "$KB_DIR/hy.crt" "$KB_DIR/hy.key"
+    step "Маскировка: $SNI"
+  fi
   if [ -n "$fp" ]; then
     case " $FPS " in *" $fp "*) FP=$fp ;; *) die "неизвестный отпечаток $fp (есть: $FPS)" ;; esac
   fi
@@ -1365,8 +1386,8 @@ cmd_harden() {
       [ -n "$XH_DEC" ] || gen_vlessenc
     fi
   fi
-  if [ -n "$rot" ]; then
-    SNI_ROT=$(onoff "$rot")
+  [ -n "$rot" ] && SNI_ROT=$(onoff "$rot")
+  if [ -n "$rot" ] || [ $site_changed = 1 ]; then
     if [ "$SNI_ROT" = 1 ]; then find_sni_alts; else SNI_ALTS=""; fi
   fi
   if [ -n "$hop" ]; then
@@ -1380,6 +1401,11 @@ cmd_harden() {
   save_state
   yn() { [ "$1" = 1 ] && echo вкл || echo выкл; }
   step "Защита: от заморозки — $(yn "$ANTIFREEZE"), отпечаток — $FP, чередование имён — $(yn "$SNI_ROT"), прыжки портов — ${HY_HOP:-выкл}"
+  if [ $site_changed = 1 ]; then
+    # the site name is in every service's config (Telegram secret, certificates, Sudoku fallback)
+    render_all; restart_services
+    [ "$KB_SYSTEMD" = 1 ] && [ -n "$old_hop" ] && [ "$old_hop" != "$HY_HOP" ] && close_ports "$old_hop/udp"
+  else
   render_xray; render_hysteria; render_hop; render_sub
   if [ "$KB_SYSTEMD" = 1 ]; then
     open_firewall
@@ -1388,6 +1414,7 @@ cmd_harden() {
     sleep 2
     systemctl is-active --quiet kombain-xray || die "Xray не запустился: $(journalctl -u kombain-xray -n 5 --no-pager | tail -3 | tr '\n' ' ')"
     [ -n "$old_hop" ] && [ "$old_hop" != "$HY_HOP" ] && close_ports "$old_hop/udp"
+  fi
   fi
   step "Готово — устройства с подпиской получат новые настройки сами"
   print_result

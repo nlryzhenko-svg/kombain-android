@@ -863,6 +863,24 @@
     <string name="srv_sni_pick">Подобрать сайт рядом с сервером</string>
     <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — Kombain зайдёт на него и проверит соседей</string>
     <string name="srv_sni_searching">Проверяю сайты рядом с сервером…\nЭто до минуты, на сервере ничего не меняется.</string>
+    <string name="srv_sp_hint">Выбранный сайт применится вместе с остальными настройками защиты по кнопке «Применить».</string>
+    <string name="srv_sp_need">сначала укажите адрес сервера и пароль или ключ</string>
+    <string name="srv_rot_new_site">Другие имена подберутся для нового сайта после «Применить».</string>
+    <string name="srv_sp_current">Сейчас</string>
+    <string name="srv_sp_current_sub">оставить как есть</string>
+    <string name="srv_sp_near">Рядом с сервером — лучший вариант</string>
+    <string name="srv_sp_scan">Найти сайты рядом с сервером</string>
+    <string name="srv_sp_scan_sub">До минуты, на сервере ничего не меняется</string>
+    <string name="srv_sp_scanning">Ищу…</string>
+    <string name="srv_sp_scanning_sub">Проверяю соседние адреса сервера, до минуты</string>
+    <string name="srv_sp_scan_failed">Не получилось: %s. Нажмите, чтобы попробовать ещё раз</string>
+    <string name="srv_sp_none">Рядом подходящих сайтов нет</string>
+    <string name="srv_sp_none_sub">Так бывает у многих хостеров — выберите популярный сайт ниже</string>
+    <string name="srv_sp_near_sub">в той же сети, %d мс</string>
+    <string name="srv_sp_popular">Популярные сайты</string>
+    <string name="srv_sp_own">Свой сайт…</string>
+    <string name="srv_sp_own_sub">Ввести адрес вручную</string>
+    <string name="srv_sp_own_msg">Сайт должен открываться по HTTPS с TLS 1.3 и HTTP/2 — сервер проверит это перед сменой.</string>
     <string name="srv_sni_title">Сайт для маскировки</string>
     <string name="srv_sni_none">Рядом с сервером подходящих сайтов не нашлось. Оставьте %s — тоже работает.</string>
     <string name="srv_sni_item">%1$s · %2$d мс</string>
@@ -989,6 +1007,5 @@
     <string name="diag_again">Проверить ещё раз</string>
     <string name="srv_tg_card">✈  Прокси для Telegram — отправить ссылку</string>
     <string name="srv_m_portskeys">Порты и ключи…</string>
-    <string name="srv_site_row">Сайт для маскировки: %s</string>
-    <string name="srv_site_hint">Нажмите, чтобы подобрать сайт рядом с сервером — так маскировка правдоподобнее.</string>
+    <string name="srv_site_hint">Под этот сайт маскируется трафик. Правдоподобнее всего сайт из той же сети, что и сервер, — найдите его в списке; если рядом ничего нет, подойдёт популярный сайт.</string>
 </resources>

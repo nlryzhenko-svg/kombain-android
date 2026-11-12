@@ -29,10 +29,15 @@ object ProtectionDialog {
         return if (i >= 0) ctx.resources.getStringArray(R.array.srv_fp_names)[i] else fp
     }
 
-    fun show(ctx: Context, s: ServerNode, onPickSite: () -> Unit, apply: (antifreeze: Boolean, fp: String, rotation: Boolean, hop: Boolean) -> Unit) {
-        var dialog: androidx.appcompat.app.AlertDialog? = null
+    /** [apply] gets the new site (domain to neighbour address) only when it was changed. */
+    fun show(
+        ctx: Context, s: ServerNode,
+        scan: (done: (org.json.JSONArray?, String?) -> Unit) -> Unit,
+        apply: (antifreeze: Boolean, fp: String, rotation: Boolean, hop: Boolean, site: Pair<String, String>?) -> Unit,
+    ) {
         val protos = s.protocols.split(',')
         var fp = s.fp
+        var site: Pair<String, String>? = null
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp2px(22), dp2px(4), dp2px(22), 0)
@@ -49,6 +54,32 @@ object ProtectionDialog {
             isEnabled = enabled
             minHeight = dp2px(48)
             textSize = 15f
+        }
+
+        /** a setting with a value to choose: «Title» on top, the value in green with › */
+        fun choice(title: Int, value: String, click: () -> Unit): TextView {
+            val v = TextView(ctx).apply {
+                text = value
+                textSize = 16f
+                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_accent))
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            }
+            box.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                minimumHeight = dp2px(56)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp2px(6), 0, dp2px(4))
+                isClickable = true
+                setBackgroundResource(android.R.drawable.list_selector_background)
+                addView(TextView(ctx).apply {
+                    setText(title)
+                    textSize = 15f
+                    setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
+                })
+                addView(v)
+                setOnClickListener { click() }
+            })
+            return v
         }
 
         // mobile whitelists: what matters for the Russian node of a cascade
@@ -69,46 +100,38 @@ object ProtectionDialog {
         box.addView(af)
         box.addView(hint(ctx.getString(if (hasXh) R.string.srv_af_hint else R.string.srv_af_no_xhttp)))
 
-        val fpRow = TextView(ctx).apply {
-            textSize = 15f
-            minHeight = dp2px(48)
-            gravity = Gravity.CENTER_VERTICAL
-            setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
-            text = ctx.getString(R.string.srv_fp_row, fpTitle(ctx, fp))
-            isClickable = true
-            setBackgroundResource(android.R.drawable.list_selector_background)
-        }
-        fpRow.setOnClickListener {
+        lateinit var fpRow: TextView
+        fpRow = choice(R.string.srv_fp_title, fpTitle(ctx, fp) + "  ›") {
             MaterialAlertDialogBuilder(ctx)
                 .setTitle(R.string.srv_fp_title)
                 .setSingleChoiceItems(R.array.srv_fp_names, FPS.indexOf(fp).coerceAtLeast(0)) { d, i ->
                     fp = FPS[i]
-                    fpRow.text = ctx.getString(R.string.srv_fp_row, fpTitle(ctx, fp))
+                    fpRow.text = fpTitle(ctx, fp) + "  ›"
                     d.dismiss()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-        box.addView(fpRow)
         box.addView(hint(ctx.getString(R.string.srv_fp_hint)))
 
-        // the masking site itself (was a separate menu line)
-        box.addView(TextView(ctx).apply {
-            textSize = 15f
-            minHeight = dp2px(48)
-            gravity = Gravity.CENTER_VERTICAL
-            setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
-            text = ctx.getString(R.string.srv_site_row, s.sni.ifBlank { "—" })
-            setBackgroundResource(android.R.drawable.list_selector_background)
-            setOnClickListener { dialog?.dismiss(); onPickSite() }
-        })
+        // the masking site: chosen here, applied together with the rest
+        lateinit var siteRow: TextView
+        lateinit var rotHint: TextView
+        siteRow = choice(R.string.srv_sni_title, s.sni.ifBlank { "—" } + "  ›") {
+            SitePicker.show(ctx, site?.first ?: s.sni, markWhitelist = s.role == "entry", scan = scan) { domain, dest ->
+                site = (domain to dest).takeIf { domain != s.sni }
+                siteRow.text = domain + "  ›"
+                rotHint.text = ctx.getString(R.string.srv_rot_new_site)
+            }
+        }
         box.addView(hint(ctx.getString(R.string.srv_site_hint)))
 
         val rot = switch(R.string.srv_rot_title, s.sniRotation)
         box.addView(rot)
-        box.addView(hint(if (s.sniRotation && s.sniAlts.isNotBlank())
+        rotHint = hint(if (s.sniRotation && s.sniAlts.isNotBlank())
             ctx.getString(R.string.srv_rot_now, (listOf(s.sni) + s.sniAlts.split(',')).joinToString(", "))
-        else ctx.getString(R.string.srv_rot_hint)))
+        else ctx.getString(R.string.srv_rot_hint))
+        box.addView(rotHint)
 
         val hasHy = "hy2" in protos
         val hop = switch(R.string.srv_hop_title, s.hop, hasHy)
@@ -118,11 +141,11 @@ object ProtectionDialog {
             else ctx.getString(R.string.srv_hop_hint)))
         }
 
-        dialog = MaterialAlertDialogBuilder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.srv_protect_title)
             .setView(androidx.core.widget.NestedScrollView(ctx).apply { addView(box) })
             .setPositiveButton(R.string.srv_protect_apply) { _, _ ->
-                apply(af.isChecked, fp, rot.isChecked, hasHy && hop.isChecked)
+                apply(af.isChecked, fp, rot.isChecked, hasHy && hop.isChecked, site)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
