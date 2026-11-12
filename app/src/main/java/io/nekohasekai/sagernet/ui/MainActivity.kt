@@ -409,16 +409,18 @@ class MainActivity : ThemedActivity(),
     }
 
     /** «Умный выбор протокола»: the profile of this server that worked on the current network last time. */
-    private suspend fun applyNetMemory() {
+    /** True when this network has a remembered profile (now selected). */
+    private suspend fun applyNetMemory(): Boolean {
         val current = DataStore.selectedProxy
-        val net = io.nekohasekai.sagernet.kombain.NetMemory.current() ?: return
-        val id = io.nekohasekai.sagernet.kombain.NetMemory.recall(current, net) ?: return
-        if (id == current) return
-        val p = SagerDatabase.proxyDao.getById(id) ?: return
+        val net = io.nekohasekai.sagernet.kombain.NetMemory.current() ?: return false
+        val id = io.nekohasekai.sagernet.kombain.NetMemory.recall(current, net) ?: return false
+        if (id == current) return true
+        val p = SagerDatabase.proxyDao.getById(id) ?: return false
         DataStore.selectedProxy = id
         ProfileManager.postUpdate(current)
         ProfileManager.postUpdate(id)
         onMainDispatcher { snackbar(getString(R.string.kb_smart_pick, net.label, p.displayName())).show() }
+        return true
     }
 
     fun toggleService() {
@@ -426,19 +428,28 @@ class MainActivity : ThemedActivity(),
             SagerNet.stopService()
             return
         }
-        if (!DataStore.kbAutoServer) {
+        if (!DataStore.kbSmartProto) {
             runOnDefaultDispatcher {
                 refreshOwnSubscription()
-                applyNetMemory()
                 onMainDispatcher { connect.launch(null) }
             }
             return
         }
+        // «Умный выбор»: what worked on this network before; on a new network — test the group once
         if (autoPicking) return
         autoPicking = true
         statusCard?.setSearching(true)
         runOnDefaultDispatcher {
             refreshOwnSubscription()
+            if (applyNetMemory()) {
+                onMainDispatcher {
+                    autoPicking = false
+                    statusCard?.setSearching(false)
+                    statusCard?.refreshProfile()
+                    connect.launch(null)
+                }
+                return@runOnDefaultDispatcher
+            }
             val currentId = DataStore.selectedProxy
             val profiles = io.nekohasekai.sagernet.kombain.AutoPick.groupOf(currentId)
             val result = runCatching {

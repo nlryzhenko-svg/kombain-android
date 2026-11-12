@@ -185,7 +185,7 @@ object Watchdog {
         }
 
         var message = app.getString(R.string.kb_wd_reconnect, name)
-        if (DataStore.kbAutoServer || DataStore.kbSmartProto) {
+        if (DataStore.kbSmartProto) {
             // the other protocols of the same server (and other servers of the group)
             val others = NetMemory.fallbackOrder(currentId)
             if (others.isNotEmpty()) {

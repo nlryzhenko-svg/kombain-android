@@ -97,34 +97,7 @@ object UsersSheet {
             }
             root.addView(row)
         }
-        val tg = json.optString("telegram")
-        if (tg.isNotEmpty()) {
-            val row = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp2px(4), dp2px(10), 0, dp2px(8))
-            }
-            val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(ctx).apply {
-                setText(R.string.srv_tg_title)
-                textSize = 16f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
-            })
-            texts.addView(TextView(ctx).apply {
-                setText(R.string.srv_tg_sub)
-                textSize = 12.5f
-                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text2))
-            })
-            row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(MaterialButton(ctx, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
-                setText(R.string.srv_tg_connect); isAllCaps = false; minWidth = 0; minimumWidth = 0
-                setPadding(dp2px(10), 0, dp2px(10), 0)
-                setTextColor(ContextCompat.getColor(ctx, R.color.kombain_fab))
-                setOnClickListener { sheet.dismiss(); showTelegram(f, node, tg) }
-            })
-            root.addView(row)
-        }
+        // the Telegram proxy link (one for everybody) is on the server card
         root.addView(MaterialButton(ctx).apply {
             setText(R.string.srv_users_add)
             isAllCaps = false

@@ -125,7 +125,11 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
             )
         }
 
+        // in «только заблокированное» Russian sites go direct anyway: the switch would only confuse
+        val ruDirect = findPreference<Preference>("ks_ru_direct")!!
+        ruDirect.isVisible = DataStore.kbRouteMode != "blocked"
         findPreference<Preference>("kbRouteMode")!!.setOnPreferenceChangeListener { _, v ->
+            ruDirect.isVisible = v != "blocked"
             if (v == "blocked") runOnDefaultDispatcher {
                 // the bundled snapshot works at once; a fresh download follows in the background
                 runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.ensure() }.onFailure { Logs.w(it) }
@@ -189,9 +193,6 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         reserve = findPreference("ks_reserve")!!
         updateReserveSummary()
         reserve.setOnPreferenceClickListener { askReserve(); true }
-        findPreference<Preference>("ks_help")!!.setOnPreferenceClickListener {
-            (activity as? MainActivity)?.displayFragment(HelpFragment()); true
-        }
         findPreference<Preference>("ks_advanced")!!.setOnPreferenceClickListener {
             (activity as? MainActivity)?.displayFragment(SettingsFragment()); true
         }

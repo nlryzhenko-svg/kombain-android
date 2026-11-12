@@ -751,8 +751,8 @@
     <string name="more_groups_sub">Группы и обновление</string>
     <string name="more_log">Журнал</string>
     <string name="more_log_sub">Если что-то не так</string>
-    <string name="more_tools">Бэкап и сеть</string>
-    <string name="more_tools_sub">Сохранить всё, проверки</string>
+    <string name="more_tools">Резервная копия</string>
+    <string name="more_tools_sub">Сохранить и восстановить всё</string>
     <string name="more_help_sub">Ответы на вопросы</string>
     <string name="more_about">О Kombain</string>
     <string name="more_about_sub">Версия и лицензии</string>
@@ -963,7 +963,7 @@
     <string name="srv_sd_off_yes">Выключить</string>
     <!-- 3.6 -->
     <string name="ks_smart">Умный выбор протокола</string>
-    <string name="ks_smart_sum">Запоминает, какой протокол вашего сервера работает в каждой сети (мобильный интернет, домашний Wi-Fi), и сам включает его. Если связь «замёрзла» — переходит на следующий протокол того же сервера.</string>
+    <string name="ks_smart_sum">Запоминает, какой профиль работает в каждой сети (мобильный интернет, домашний Wi-Fi), и сам включает его. В новой сети сначала проверяет все профили группы и берёт самый быстрый. Если связь «замёрзла» — переходит на другой живой протокол или сервер.</string>
     <string name="ks_reserve">Резервный адрес подписки</string>
     <string name="ks_reserve_off">Выключен — если IP сервера заблокируют, устройства не узнают, куда он переехал</string>
     <string name="ks_reserve_on">Включён (GitHub: %s)</string>
@@ -988,4 +988,7 @@
     <string name="diag_go">Проверить</string>
     <string name="diag_again">Проверить ещё раз</string>
     <string name="srv_tg_card">✈  Прокси для Telegram — отправить ссылку</string>
+    <string name="srv_m_portskeys">Порты и ключи…</string>
+    <string name="srv_site_row">Сайт для маскировки: %s</string>
+    <string name="srv_site_hint">Нажмите, чтобы подобрать сайт рядом с сервером — так маскировка правдоподобнее.</string>
 </resources>

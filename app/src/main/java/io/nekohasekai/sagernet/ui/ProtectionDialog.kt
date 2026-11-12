@@ -29,7 +29,8 @@ object ProtectionDialog {
         return if (i >= 0) ctx.resources.getStringArray(R.array.srv_fp_names)[i] else fp
     }
 
-    fun show(ctx: Context, s: ServerNode, apply: (antifreeze: Boolean, fp: String, rotation: Boolean, hop: Boolean) -> Unit) {
+    fun show(ctx: Context, s: ServerNode, onPickSite: () -> Unit, apply: (antifreeze: Boolean, fp: String, rotation: Boolean, hop: Boolean) -> Unit) {
+        var dialog: androidx.appcompat.app.AlertDialog? = null
         val protos = s.protocols.split(',')
         var fp = s.fp
         val box = LinearLayout(ctx).apply {
@@ -91,6 +92,18 @@ object ProtectionDialog {
         box.addView(fpRow)
         box.addView(hint(ctx.getString(R.string.srv_fp_hint)))
 
+        // the masking site itself (was a separate menu line)
+        box.addView(TextView(ctx).apply {
+            textSize = 15f
+            minHeight = dp2px(48)
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(ContextCompat.getColor(ctx, R.color.kombain_text))
+            text = ctx.getString(R.string.srv_site_row, s.sni.ifBlank { "—" })
+            setBackgroundResource(android.R.drawable.list_selector_background)
+            setOnClickListener { dialog?.dismiss(); onPickSite() }
+        })
+        box.addView(hint(ctx.getString(R.string.srv_site_hint)))
+
         val rot = switch(R.string.srv_rot_title, s.sniRotation)
         box.addView(rot)
         box.addView(hint(if (s.sniRotation && s.sniAlts.isNotBlank())
@@ -105,7 +118,7 @@ object ProtectionDialog {
             else ctx.getString(R.string.srv_hop_hint)))
         }
 
-        MaterialAlertDialogBuilder(ctx)
+        dialog = MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.srv_protect_title)
             .setView(androidx.core.widget.NestedScrollView(ctx).apply { addView(box) })
             .setPositiveButton(R.string.srv_protect_apply) { _, _ ->

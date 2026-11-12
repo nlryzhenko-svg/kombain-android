@@ -121,7 +121,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
             detail.text = ctx.getString(
                 when {
                     newState == BaseService.State.Connecting -> R.string.kb_hint_connecting
-                    DataStore.kbAutoServer -> R.string.kb_hint_off_auto
+                    DataStore.kbSmartProto -> R.string.kb_hint_off_auto
                     else -> R.string.kb_hint_off
                 }
             )

@@ -75,12 +75,6 @@
             app:key="kbSmartProto"
             app:summary="@string/ks_smart_sum"
             app:title="@string/ks_smart" />
-        <SwitchPreference
-            app:defaultValue="false"
-            app:icon="@drawable/ic_kombain_auto"
-            app:key="kbAutoServer"
-            app:summary="@string/ks_auto_sum"
-            app:title="@string/ks_auto" />
         <Preference
             app:icon="@drawable/ic_baseline_battery_charging_full_24"
             app:key="ks_battery"
@@ -163,11 +157,6 @@
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_more">
-        <Preference
-            app:icon="@drawable/ic_baseline_info_24"
-            app:key="ks_help"
-            app:summary="@string/ks_help_sum"
-            app:title="@string/ks_help" />
         <Preference
             app:icon="@drawable/ic_action_settings"
             app:key="ks_advanced"

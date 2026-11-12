@@ -266,20 +266,15 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
         // ids keep the actions stable when the Telegram item is absent
         val entries = listOfNotNull(
             8 to getString(R.string.srv_m_protect),
-            10 to getString(R.string.srv_m_move),
+            11 to getString(R.string.srv_m_portskeys),
             tgItem?.let { 4 to it },
             if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
-            5 to getString(R.string.srv_m_sni),
-            6 to getString(R.string.srv_m_shuffle),
-            if (s.role != "exit") 7 to getString(R.string.srv_m_auto_ports) else null,
-            0 to getString(R.string.srv_m_rotate), 1 to getString(R.string.srv_m_ports),
+            10 to getString(R.string.srv_m_move),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
         )
-        val items = entries.map { it.second }.toTypedArray()
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(s.name)
-            .setItems(items) { _, pos ->
-                when (entries[pos].first) {
+        lateinit var handle: (Int) -> Unit
+        handle = { id ->
+                when (id) {
                     9 -> if (s.hasSudoku) MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.srv_m_sd_off)
                         .setMessage(getString(R.string.srv_sd_off_msg, s.name))
@@ -296,8 +291,23 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                     10 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
                     else (activity as? MainActivity)?.displayFragment(ServerMoveFragment.of(s))
 
-                    8 -> ProtectionDialog.show(requireContext(), s) { af, fp, rot, hop ->
+                    8 -> ProtectionDialog.show(requireContext(), s, onPickSite = { handle(5) }) { af, fp, rot, hop ->
                         Deployer.harden(s, af, fp, rot, hop); scrollTop()
+                    }
+
+                    11 -> {
+                        // ports and keys: one place instead of four menu lines
+                        val sub = listOfNotNull(
+                            6 to getString(R.string.srv_m_shuffle),
+                            if (s.role != "exit") 7 to getString(R.string.srv_m_auto_ports) else null,
+                            0 to getString(R.string.srv_m_rotate),
+                            1 to getString(R.string.srv_m_ports),
+                        )
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(R.string.srv_m_portskeys)
+                            .setItems(sub.map { it.second }.toTypedArray()) { _, i -> handle(sub[i].first) }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
                     }
 
                     6 -> MaterialAlertDialogBuilder(requireContext())
@@ -361,7 +371,10 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                         ServerStore.remove(s.id); renderServers()
                     }
                 }
-            }
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(s.name)
+            .setItems(entries.map { it.second }.toTypedArray()) { _, pos -> handle(entries[pos].first) }
             .show()
     }
 

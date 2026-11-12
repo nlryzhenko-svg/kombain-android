@@ -15,11 +15,12 @@ class ToolsFragment : ToolbarFragment(R.layout.layout_tools) {
         toolbar.setTitle(R.string.more_tools)
 
         val tools = mutableListOf<NamedFragment>()
-        tools.add(NetworkFragment())
+        // the old network test (NAT behaviour) is replaced by «Диагностика»
         tools.add(BackupFragment())
 
         val binding = LayoutToolsBinding.bind(view)
         binding.toolsPager.adapter = ToolsAdapter(tools)
+        binding.toolsTab.visibility = if (tools.size > 1) View.VISIBLE else View.GONE
 
         TabLayoutMediator(binding.toolsTab, binding.toolsPager) { tab, position ->
             tab.text = tools[position].name()
