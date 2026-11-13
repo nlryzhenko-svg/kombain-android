@@ -21,8 +21,19 @@ import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
  */
 object ProtectionDialog {
 
-    /** uTLS fingerprints Xray understands, in the order shown */
-    val FPS = listOf("firefox", "edge", "chrome", "safari", "ios", "android", "360", "qq", "random", "randomized")
+    /**
+     * uTLS fingerprints the current REALITY accepts, in the order shown. The old Edge, iOS, Android,
+     * 360 and QQ profiles (and so the random ones) are rejected by the server: no post-quantum key share.
+     */
+    val FPS = listOf("firefox", "chrome", "safari")
+
+    /** Any fingerprint → the working one closest to it. */
+    fun fixFp(fp: String?): String = when (fp) {
+        "firefox", "chrome", "safari" -> fp
+        "edge", "360", "qq", "android" -> "chrome"
+        "ios" -> "safari"
+        else -> "firefox"
+    }
 
     fun fpTitle(ctx: Context, fp: String): String {
         val i = FPS.indexOf(fp)
@@ -36,7 +47,7 @@ object ProtectionDialog {
         apply: (antifreeze: Boolean, fp: String, rotation: Boolean, hop: Boolean, site: Pair<String, String>?) -> Unit,
     ) {
         val protos = s.protocols.split(',')
-        var fp = s.fp
+        var fp = fixFp(s.fp)
         var site: Pair<String, String>? = null
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -155,7 +166,7 @@ object ProtectionDialog {
     fun summary(ctx: Context, s: ServerNode): String {
         val parts = mutableListOf<String>()
         if (s.antifreeze && "xhttp" in s.protocols.split(',')) parts += ctx.getString(R.string.srv_ps_af)
-        parts += fpTitle(ctx, s.fp).substringBefore(" (").substringBefore(" —")
+        parts += fpTitle(ctx, fixFp(s.fp)).substringBefore(" (").substringBefore(" —")
         if (s.sniRotation && s.sniAlts.isNotBlank()) parts += ctx.getString(R.string.srv_ps_rot, s.sniAlts.split(',').size + 1)
         if (s.hyHop.isNotBlank()) parts += ctx.getString(R.string.srv_ps_hop)
         return ctx.getString(R.string.srv_ps, parts.joinToString(", "))

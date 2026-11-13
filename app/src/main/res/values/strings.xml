@@ -943,18 +943,11 @@
     <string name="srv_af_no_xhttp">На этом сервере нет XHTTP — включите его при установке, чтобы пользоваться защитой от заморозки.</string>
     <string name="srv_fp_title">Отпечаток браузера</string>
     <string name="srv_fp_row">Отпечаток браузера: %s</string>
-    <string name="srv_fp_hint">Каким браузером притворяется VPN при TLS-рукопожатии. Сейчас лучше всего проходят Firefox и Edge; Chrome, Safari и iPhone у ТСПУ под подозрением. Opera, Яндекс Браузер и Brave сделаны на Chromium — их отпечаток такой же, как у Chrome.</string>
+    <string name="srv_fp_hint">Каким браузером притворяется VPN при TLS-рукопожатии. Сейчас лучше всего проходит Firefox; Chrome и Safari у ТСПУ под подозрением. Edge, Opera, Яндекс Браузер и Brave сделаны на Chromium — их отпечаток такой же, как у Chrome.</string>
     <string-array name="srv_fp_names">
         <item>Firefox — рекомендуется</item>
-        <item>Edge</item>
-        <item>Chrome (Opera, Яндекс Браузер, Brave) ⚠</item>
-        <item>Safari на Mac ⚠</item>
-        <item>Safari на iPhone ⚠</item>
-        <item>Android-приложение (OkHttp)</item>
-        <item>360 Browser</item>
-        <item>QQ Browser</item>
-        <item>Случайный браузер</item>
-        <item>Полностью случайный (может выделяться)</item>
+        <item>Chrome (Edge, Opera, Яндекс Браузер, Brave)</item>
+        <item>Safari</item>
     </string-array>
     <string name="srv_rot_title">Чередовать имена сайта маскировки</string>
     <string name="srv_rot_hint">Сервер принимает 2–3 имени одного сайта (например, site.com и www.site.com), а Kombain распределяет соединения между ними — нет «залпа» рукопожатий к одному имени.</string>

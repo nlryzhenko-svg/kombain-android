@@ -131,7 +131,9 @@ private fun StandardV2RayBean.xrayStreamSettings(serverNameOverride: String?): J
     }
 
     val serverName = serverNameOverride ?: sni.ifBlank { host.ifBlank { if (serverAddress.any { it.isLetter() }) serverAddress else "" } }
-    val fp = utlsFingerprint.ifBlank { "firefox" }
+    // REALITY rejects the old Edge / iOS / Android / 360 / QQ fingerprints (no post-quantum key share)
+    val fp = if (security == "tls" && realityPubKey.isNotBlank()) io.nekohasekai.sagernet.ui.ProtectionDialog.fixFp(utlsFingerprint.ifBlank { "firefox" })
+    else utlsFingerprint.ifBlank { "firefox" }
     when {
         security == "tls" && realityPubKey.isNotBlank() -> {
             stream.put("security", "reality")
