@@ -89,6 +89,48 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
 
     private fun isUdp(p: ProxyEntity) = p.type == ProxyEntity.TYPE_HYSTERIA || p.type == ProxyEntity.TYPE_TUIC
 
+    private class HopCheck(val verdict: String?, val turnOff: Boolean)
+
+    /**
+     * Connects to Hysteria2 on the main port and on 12 random ports of the hopping range, one by one.
+     * When part of the range is filtered on the way, hopping lands on a dead port now and then:
+     * the connection fails to start or video stops for the length of one hop.
+     */
+    private suspend fun checkHop(node: ServerNode, profiles: List<ProxyEntity>): HopCheck? {
+        val hy = profiles.firstOrNull { it.type == ProxyEntity.TYPE_HYSTERIA && it.hysteriaBean?.protocolVersion == 2 }
+            ?: return null
+        val bean = hy.hysteriaBean ?: return null
+        val a = node.hyHop.substringBefore('-').toIntOrNull() ?: return null
+        val b = node.hyHop.substringAfter('-').toIntOrNull() ?: return null
+        val ports = listOf(node.hyPort) + (a..b).shuffled().take(12)
+        val row = onMainDispatcher { Row("Прыжки портов Hysteria2") }
+        onMainDispatcher { row.set(null, "проверяю ${ports.size - 1} портов из ${node.hyHop.replace("-", "–")}…") }
+        val copies = ports.mapIndexed { i, port ->
+            ProxyEntity(id = -100L - i, groupId = hy.groupId, type = hy.type).putBean(
+                (bean.clone() as io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean).apply { serverPorts = port.toString() }
+            )
+        }
+        val ok = runCatching { AutoPick.test(copies, persist = false).alive.map { it.first.id } }.getOrNull() ?: return null
+        val mainOk = copies[0].id in ok
+        val range = copies.drop(1)
+        val good = range.count { it.id in ok }
+        val dead = range.filter { it.id !in ok }.map { it.hysteriaBean!!.serverPorts }
+        val n = range.size
+        onMainDispatcher {
+            row.set(good == n, when {
+                good == n -> "все $n портов открыты"
+                good == 0 -> "закрыты все $n портов" + if (mainOk) ", основной порт ${node.hyPort} работает" else ""
+                else -> "открыто $good из $n, режутся: ${dead.joinToString(", ")}"
+            })
+        }
+        return when {
+            good == n -> HopCheck(if (node.hop) "Прыжки портов Hysteria2 в этой сети работают: все проверенные порты открыты." else null, false)
+            !mainOk && good == 0 -> HopCheck("Hysteria2 не проходит ни на одном порту — эта сеть режет UDP к серверу. Используйте XHTTP, VLESS или Sudoku.", false)
+            good == 0 -> HopCheck("Диапазон прыжков ${node.hyHop.replace("-", "–")} закрыт целиком, а основной порт работает — скорее всего, его не пропускает файрвол хостера. Выключите прыжки портов.", node.hop)
+            else -> HopCheck("В этой сети режется часть портов диапазона прыжков ($good из $n открыты). Поэтому Hysteria2 с прыжками то подключается, то «нет связи», а видео подвисает секунд на 10, когда прыжок попадает на закрытый порт. Выключите прыжки — Hysteria2 будет работать на одном порту.", node.hop)
+        }
+    }
+
     private fun run() {
         running = true
         rows.removeAllViews()
@@ -147,6 +189,9 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
             val best = alive.firstOrNull()?.first
             if (best != null) NetMemory.remember(best.id, net)
 
+            // Hysteria2 port hopping: are all ports of the range open from this network?
+            val hop = node?.takeIf { it.hyHop.contains('-') }?.let { n -> checkHop(n, profiles) }
+
             val udpAll = profiles.filter { isUdp(it) }
             val udpDead = udpAll.isNotEmpty() && alive.none { isUdp(it.first) }
             val tcpAlive = alive.any { !isUdp(it.first) }
@@ -164,6 +209,7 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
                     }
                 }
                 if (!foreign && best != null) append("\n\nНапрямую ${if (ru) "зарубежные сайты" else "сайты"} не открываются, а через VPN — да.")
+                hop?.verdict?.let { append("\n\n").append(it) }
             }
             onMainDispatcher {
                 if (!isAdded) return@onMainDispatcher
@@ -173,6 +219,20 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
                 verdict.text = text
                 verdict.isVisible = true
                 when {
+                    hop?.turnOff == true && node != null -> {
+                        action.text = "Выключить прыжки портов"
+                        action.isVisible = true
+                        action.setOnClickListener {
+                            action.isVisible = false
+                            if (io.nekohasekai.sagernet.kombain.Deployer.running) {
+                                (activity as? MainActivity)?.snackbar(R.string.srv_busy)?.show()
+                            } else {
+                                io.nekohasekai.sagernet.kombain.Deployer.harden(node, node.antifreeze, node.fp, node.sniRotation, false)
+                                (activity as? MainActivity)?.snackbar("Выключаю прыжки портов — ход видно в «Моих серверах»")?.show()
+                            }
+                        }
+                    }
+
                     best != null && best.id != DataStore.selectedProxy -> {
                         action.text = "Использовать «${best.displayName()}»"
                         action.isVisible = true
