@@ -29,7 +29,19 @@ object ServerHealth {
         if (disk >= 95) return "Диск заполнен на $disk%"
         val total = st.optLong("memTotalKb"); val avail = st.optLong("memAvailKb")
         if (total > 0 && avail * 100 / total < 3) return "Почти нет свободной памяти"
+        exitProblem(st)?.let { return it }
         return overload(st).firstOrNull().orEmpty()
+    }
+
+    /** Entry node of a cascade: traffic must leave through the exit server. Null when fine or not an entry. */
+    fun exitProblem(st: JSONObject): String? {
+        val addr = st.optString("exitAddr").takeIf { it.isNotBlank() } ?: return null
+        val exitIp = st.optString("exitIp")
+        return when {
+            exitIp.isBlank() -> "Нет связи с выходным сервером $addr — заблокированные сайты не откроются"
+            exitIp == st.optString("ownIp") -> "Трафик выходит с самого российского сервера, а не через $addr"
+            else -> null
+        }
     }
 
     /** Signs that the server itself chokes — the reason connections hang on a working server. */
@@ -70,6 +82,11 @@ object ServerHealth {
         }
         add(summary(st))
         add("Диск занят на ${st.optInt("diskPct")}%")
+        if (st.optString("exitAddr").isNotBlank()) {
+            val p = exitProblem(st)
+            add(if (p == null) "Выход в интернет: через выходной сервер (IP ${st.optString("exitIp")}) — заблокированные сайты открываются"
+            else "⚠ $p")
+        }
         if (st.has("steal")) {
             val rss = st.optLong("xrayRssKb")
             add("Процессор: забирает хостер ${st.optInt("steal")}%" + (if (rss > 0) " · Xray занимает ${size(rss * 1024)} ОЗУ" else ""))
