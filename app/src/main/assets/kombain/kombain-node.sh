@@ -1008,9 +1008,28 @@ cmd_stats() {
     [ $ufirst = 1 ] || users+=","; ufirst=0
     users+=$(printf '{"name":"%s","up":%s,"down":%s}' "$(json_str "$name")" "${u:-0}" "${d:-0}")
   done < "$(users_file)"
+  # is the server itself choking: crashes, memory kills, the connection table, a stolen CPU
+  local restarts=0 oom=0 swap_total swap_free ct=0 ct_max=0 steal=0 cpus=1 xray_rss=0 a b pid n
+  if [ "$KB_SYSTEMD" = 1 ]; then
+    for s in $(svc_list); do
+      n=$(systemctl show "kombain-$s" -p NRestarts --value 2>/dev/null || true)
+      [[ $n =~ ^[0-9]+$ ]] && restarts=$((restarts + n))
+    done
+    pid=$(systemctl show kombain-xray -p MainPID --value 2>/dev/null || true)
+    [[ $pid =~ ^[1-9][0-9]*$ ]] && xray_rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
+  fi
+  oom=$({ journalctl -k -b --no-pager 2>/dev/null || dmesg 2>/dev/null; } | grep -ciE 'out of memory|oom-kill|killed process' || true)
+  swap_total=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo); swap_free=$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)
+  [ -r /proc/sys/net/netfilter/nf_conntrack_count ] && ct=$(cat /proc/sys/net/netfilter/nf_conntrack_count) && ct_max=$(cat /proc/sys/net/netfilter/nf_conntrack_max)
+  cpus=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)
+  # CPU time the host takes away from this VPS ("steal"), over one second
+  a=$(awk '/^cpu / {t=0; for (i=2;i<=NF;i++) t+=$i; print t, $9}' /proc/stat); sleep 1
+  b=$(awk '/^cpu / {t=0; for (i=2;i<=NF;i++) t+=$i; print t, $9}' /proc/stat)
+  steal=$(awk -v a="$a" -v b="$b" 'BEGIN {split(a,x," "); split(b,y," "); d=y[1]-x[1]; if (d > 0) printf "%d", (y[2]-x[2])*100/d; else print 0}')
   local json
-  json=$(printf '{"uptime":%s,"load":"%s","memTotalKb":%s,"memAvailKb":%s,"diskPct":%s,"rx":%s,"tx":%s,"role":"%s","protocols":"%s","services":[%s],"users":[%s]}' \
-    "${up:-0}" "$load" "${mem_total:-0}" "${mem_avail:-0}" "${disk:-0}" "${rx:-0}" "${tx:-0}" "$ROLE" "$PROTOCOLS" "$svcs" "$users")
+  json=$(printf '{"uptime":%s,"load":"%s","memTotalKb":%s,"memAvailKb":%s,"diskPct":%s,"rx":%s,"tx":%s,"role":"%s","protocols":"%s","services":[%s],"users":[%s],"restarts":%s,"oom":%s,"swapUsedKb":%s,"conntrack":%s,"conntrackMax":%s,"steal":%s,"cpus":%s,"xrayRssKb":%s}' \
+    "${up:-0}" "$load" "${mem_total:-0}" "${mem_avail:-0}" "${disk:-0}" "${rx:-0}" "${tx:-0}" "$ROLE" "$PROTOCOLS" "$svcs" "$users" \
+    "${restarts:-0}" "${oom:-0}" "$(( ${swap_total:-0} - ${swap_free:-0} ))" "${ct:-0}" "${ct_max:-0}" "${steal:-0}" "${cpus:-1}" "${xray_rss:-0}")
   echo "KB_STATS $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
 

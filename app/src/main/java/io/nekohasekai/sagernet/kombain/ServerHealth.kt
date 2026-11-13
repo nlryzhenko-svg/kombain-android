@@ -29,7 +29,24 @@ object ServerHealth {
         if (disk >= 95) return "Диск заполнен на $disk%"
         val total = st.optLong("memTotalKb"); val avail = st.optLong("memAvailKb")
         if (total > 0 && avail * 100 / total < 3) return "Почти нет свободной памяти"
-        return ""
+        return overload(st).firstOrNull().orEmpty()
+    }
+
+    /** Signs that the server itself chokes — the reason connections hang on a working server. */
+    fun overload(st: JSONObject): List<String> = buildList {
+        val oom = st.optInt("oom")
+        if (oom > 0) add("Серверу не хватает памяти: система убивала процессы ($oom раз с последней перезагрузки). Нужен тариф с ОЗУ побольше или отключите лишние протоколы")
+        val restarts = st.optInt("restarts")
+        if (restarts > 0) add("Службы VPN падали и перезапускались ($restarts раз) — в эти моменты связь обрывается")
+        val ct = st.optLong("conntrack"); val ctMax = st.optLong("conntrackMax")
+        if (ctMax > 0 && ct * 100 / ctMax >= 80) add("Таблица соединений сервера почти заполнена ($ct из $ctMax) — новые соединения теряются")
+        val steal = st.optInt("steal")
+        if (steal >= 20) add("Хостер забирает $steal% процессора сервера (перегруженный VPS) — от этого подвисания. Поможет другой тариф или хостер")
+        val total = st.optLong("memTotalKb"); val avail = st.optLong("memAvailKb"); val swap = st.optLong("swapUsedKb")
+        if (total > 0 && avail * 100 / total < 10 && swap > 64 * 1024) add("Память на исходе, сервер работает с диска (swap ${size(swap * 1024)}) — всё тормозит")
+        val load = st.optString("load").substringBefore(' ').toDoubleOrNull() ?: 0.0
+        val cpus = st.optInt("cpus", 1).coerceAtLeast(1)
+        if (load > cpus * 2) add("Процессор сервера перегружен (нагрузка $load при $cpus ядр.)")
     }
 
     /** One line for the server card. */
@@ -53,6 +70,13 @@ object ServerHealth {
         }
         add(summary(st))
         add("Диск занят на ${st.optInt("diskPct")}%")
+        if (st.has("steal")) {
+            val rss = st.optLong("xrayRssKb")
+            add("Процессор: забирает хостер ${st.optInt("steal")}%" + (if (rss > 0) " · Xray занимает ${size(rss * 1024)} ОЗУ" else ""))
+            val bad = overload(st)
+            if (bad.isEmpty()) add("Признаков перегрузки сервера нет: не падал, памяти и процессора хватает")
+            else bad.forEach { add("⚠ $it") }
+        }
         add(traffic(st))
         val users = st.optJSONArray("users")
         for (i in 0 until (users?.length() ?: 0)) {
