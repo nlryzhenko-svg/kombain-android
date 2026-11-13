@@ -158,6 +158,52 @@ object Deployer {
         }
     }
 
+    /** The Russian entry node that forwards to [node], if there is one. */
+    fun entryOf(node: ServerNode): ServerNode? = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
+
+    /** Points the entry node of [node] at its new address / keys / port. Null when fine (or nothing to do). */
+    private fun relinkEntry(node: ServerNode, json: JSONObject, why: String): String? {
+        val entry = entryOf(node) ?: return null
+        val bridge = json.optString("bridge").takeIf { it.isNotBlank() } ?: return null
+        emit("── $why: входной сервер ${entry.name}")
+        val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
+        if (!r2.ok) return r2.error ?: "входной сервер не переключился"
+        ServerStore.upsert(entry)
+        return null
+    }
+
+    /**
+     * «Добавить вход в России»: [entry] (a VPS in Russia) becomes the entry of the already working [exit].
+     * The exit only gets a bridge user — its keys, users, ports and own profiles stay as they are.
+     */
+    fun attachEntry(exit: ServerNode, entry: ServerNode) {
+        if (!start("Вход в России: ${entry.name} → ${exit.name}")) return
+        runOnDefaultDispatcher {
+            emit("── Шаг 1 из 2: связь на сервере ${exit.name}")
+            val r1 = ssh(exit).run(listOf("enable-bridge"))
+            val bridge = r1.json?.optString("bridge").orEmpty()
+            if (!r1.ok || r1.json == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(false, r1.error ?: "сервер ${exit.name} не ответил")
+            syncInfo(exit, r1.json)
+            ServerStore.upsert(exit)
+
+            emit("── Шаг 2 из 2: входной сервер ${entry.name}")
+            runCatching { Whitelist.describe(Whitelist.check(entry.host, entry.sni)) }.getOrNull()
+                ?.lines()?.forEach { emit(it) }
+            entry.role = "entry"
+            entry.exitId = exit.id
+            val r2 = ssh(entry).run(installArgs(entry, listOf("--role", "entry", "--exit-link", bridge)))
+            if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не установился")
+            entry.installedAt = System.currentTimeMillis()
+            syncInfo(entry, r2.json)
+            val group = "${entry.name} → ${exit.name}"
+            val n = importLinks(entry, group, r2.json, replace = true)
+            ServerStore.upsert(entry)
+            finish(true, "Готово: вход в России работает, профилей — $n, группа «$group». " +
+                    "Прямые профили «${exit.name}» тоже остались.${tgNote(r2.json)}")
+            telegramOf(r2.json).takeIf { it.isNotEmpty() }?.let { onMainDispatcher { telegramReady?.invoke(entry, it) } }
+        }
+    }
+
     fun addUser(node: ServerNode, userName: String) {
         if (!start("Новый пользователь «$userName» на ${node.name}")) return
         runOnDefaultDispatcher {
@@ -216,26 +262,13 @@ object Deployer {
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить ключи")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
-            when (node.role) {
-                "exit" -> {
-                    // the entry node must learn the exit's new credentials
-                    val bridge = r.json.optString("bridge")
-                    val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
-                    if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Ключи заменены.")
-                    emit("── Переключаю входной сервер ${entry.name} на новые ключи")
-                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
-                    if (!r2.ok || r2.json == null) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
-                    ServerStore.upsert(entry)
-                    finish(true, "Ключи выходного сервера заменены, каскад продолжает работать.")
-                }
-
-                else -> {
-                    val n = importLinks(node, groupName(node), r.json, replace = true)
-                    ServerStore.upsert(node)
-                    finish(true, "Ключи заменены, профили обновлены: $n. Другим пользователям отправьте новые ссылки." +
-                            if (telegramOf(r.json).isNotEmpty()) " Ссылка Telegram-прокси тоже новая." else "")
-                }
-            }
+            relinkEntry(node, r.json, "Переключаю на новые ключи")?.let { return@runOnDefaultDispatcher finish(false, it) }
+            if (node.role == "exit") return@runOnDefaultDispatcher finish(true, "Ключи выходного сервера заменены, каскад продолжает работать.")
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Ключи заменены, профили обновлены: $n. Другим пользователям отправьте новые ссылки." +
+                    (if (entryOf(node) != null) " Вход в России переключён." else "") +
+                    if (telegramOf(r.json).isNotEmpty()) " Ссылка Telegram-прокси тоже новая." else "")
         }
     }
 
@@ -306,20 +339,13 @@ object Deployer {
     fun shufflePorts(node: ServerNode) {
         if (!start("Новые порты для ${node.name}")) return
         runOnDefaultDispatcher {
-            val args = if (node.role == "exit") listOf("shuffle-ports", "--relink") else listOf("shuffle-ports")
+            val args = if (node.role == "exit" || entryOf(node) != null) listOf("shuffle-ports", "--relink") else listOf("shuffle-ports")
             val r = ssh(node).run(args)
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось сменить порты")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
-            if (node.role == "exit") {
-                val bridge = r.json.optString("bridge")
-                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
-                if (entry == null || bridge.isBlank()) return@runOnDefaultDispatcher finish(true, "Порты сменены.")
-                emit("── Переключаю входной сервер ${entry.name} на новый порт")
-                val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
-                if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
-                return@runOnDefaultDispatcher finish(true, "Порты выходного сервера сменены, каскад работает.")
-            }
+            relinkEntry(node, r.json, "Переключаю на новый порт")?.let { return@runOnDefaultDispatcher finish(false, it) }
+            if (node.role == "exit") return@runOnDefaultDispatcher finish(true, "Порты выходного сервера сменены, каскад работает.")
             val n = importLinks(node, groupName(node), r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Порты сменены, профили обновлены ($n). Telegram-прокси не тронут, устройства с подпиской обновятся сами.")
@@ -341,17 +367,9 @@ object Deployer {
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
             syncInfo(node, r.json)
             ServerStore.upsert(node)
-            if (node.role == "exit") {
-                // the entry node dials the exit with the exit's fingerprint
-                val bridge = r.json.optString("bridge")
-                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == node.id }
-                if (entry != null && bridge.isNotBlank()) {
-                    emit("── Обновляю связь входного сервера ${entry.name}")
-                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
-                    if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
-                }
-                return@runOnDefaultDispatcher finish(true, "Защита выходного сервера обновлена, каскад работает.")
-            }
+            // the entry node dials this server with its fingerprint
+            relinkEntry(node, r.json, "Обновляю связь")?.let { return@runOnDefaultDispatcher finish(false, it) }
+            if (node.role == "exit") return@runOnDefaultDispatcher finish(true, "Защита выходного сервера обновлена, каскад работает.")
             val n = importLinks(node, groupName(node), r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Защита обновлена, профили обновлены ($n). Устройства с подпиской получат её сами.")
@@ -385,17 +403,8 @@ object Deployer {
             old.installedAt = System.currentTimeMillis(); old.stats = ""; old.statsAt = 0L; old.health = ""
             syncInfo(old, r.json)
             ServerStore.upsert(old)
-            if (old.role == "exit") {
-                val bridge = r.json.optString("bridge")
-                val entry = ServerStore.all().firstOrNull { it.role == "entry" && it.exitId == old.id }
-                if (entry != null && bridge.isNotBlank()) {
-                    emit("── Переключаю входной сервер ${entry.name} на новый адрес")
-                    val r2 = ssh(entry).run(listOf("set-exit", "--exit-link", bridge))
-                    if (!r2.ok) return@runOnDefaultDispatcher finish(false, r2.error ?: "входной сервер не переключился")
-                    ServerStore.upsert(entry)
-                }
-                return@runOnDefaultDispatcher finish(true, "Выходной сервер переехал, каскад работает.")
-            }
+            relinkEntry(old, r.json, "Переключаю на новый адрес")?.let { return@runOnDefaultDispatcher finish(false, it) }
+            if (old.role == "exit") return@runOnDefaultDispatcher finish(true, "Выходной сервер переехал, каскад работает.")
             val n = importLinks(old, groupName(old), r.json, replace = true)
             ServerStore.upsert(old)
             finish(true, "Переезд завершён, профили обновлены ($n)." +

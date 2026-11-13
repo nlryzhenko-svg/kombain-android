@@ -15,6 +15,14 @@ import io.nekohasekai.sagernet.ktx.snackbar
 /** Wizard: deploy one node or a cascade (entry in Russia → exit abroad) over SSH. */
 class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
 
+    companion object {
+        /** «Добавить вход в России» for an already working server: only the Russian node's form. */
+        fun attachTo(exit: ServerNode) = ServerWizardFragment().apply { arguments = Bundle().apply { putString("attach", exit.id) } }
+    }
+
+    /** the working server a Russian entry is added to (null: a new single server or cascade) */
+    private val attachExit by lazy { arguments?.getString("attach")?.let { id -> io.nekohasekai.sagernet.kombain.ServerStore.all().firstOrNull { it.id == id } } }
+
     private lateinit var main: View
     private lateinit var entry: View
     private var cascade = false
@@ -35,6 +43,16 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
             }
         }
         applyMode(view)
+        attachExit?.let { exit ->
+            // only the Russian node is new; the protocols of the entry are chosen below as usual
+            cascade = true
+            applyMode(view)
+            toolbar.title = getString(R.string.srv_attach_title, exit.name)
+            group.isVisible = false
+            view.findViewById<View>(R.id.mode_hint)?.let { (it as TextView).text = getString(R.string.srv_attach_hint, exit.name) }
+            main.isVisible = false
+            view.findViewById<CheckBox>(R.id.p_sudoku)?.isVisible = false
+        }
 
         for (form in listOf(main, entry)) form.findViewById<View>(R.id.f_sni_pick).setOnClickListener { pickSite(form) }
         val tg = view.findViewById<CheckBox>(R.id.p_tg)
@@ -131,6 +149,15 @@ class ServerWizardFragment : ToolbarFragment(R.layout.layout_server_wizard) {
             snackbar(R.string.srv_err_ports).show(); return
         }
 
+        attachExit?.let { exit ->
+            val entryNode = readNode(entry, getString(R.string.srv_default_entry)) ?: return
+            entryNode.protocols = protos.joinToString(","); entryNode.vpnPort = vPort; entryNode.hyPort = hPort
+            entryNode.xhPort = xPort; entryNode.tuicPort = tPort; entryNode.tgPort = gPort
+            if (withTg) entryNode.protocols += ",tg"
+            Deployer.attachEntry(exit, entryNode)
+            (activity as? MainActivity)?.displayFragment(MyServersFragment())
+            return
+        }
         val mainNode = readNode(main, if (cascade) getString(R.string.srv_default_exit) else getString(R.string.srv_default_single)) ?: return
         mainNode.protocols = protos.joinToString(","); mainNode.vpnPort = vPort; mainNode.hyPort = hPort
         mainNode.xhPort = xPort; mainNode.tuicPort = tPort; mainNode.tgPort = gPort

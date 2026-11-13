@@ -269,6 +269,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             11 to getString(R.string.srv_m_portskeys),
             tgItem?.let { 4 to it },
             if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
+            if (s.role == "single" && Deployer.entryOf(s) == null) 12 to getString(R.string.srv_m_attach) else null,
             10 to getString(R.string.srv_m_move),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
         )
@@ -287,6 +288,9 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                         .setPositiveButton(R.string.srv_sd_yes) { _, _ -> Deployer.enableSudoku(s); scrollTop() }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+
+                    12 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
+                    else (activity as? MainActivity)?.displayFragment(ServerWizardFragment.attachTo(s))
 
                     10 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
                     else (activity as? MainActivity)?.displayFragment(ServerMoveFragment.of(s))
