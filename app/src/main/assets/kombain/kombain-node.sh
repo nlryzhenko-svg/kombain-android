@@ -781,7 +781,7 @@ user_links() { # name uuid hypass index -> "proto link" lines
   if has_proto xhttp; then
     label=$(urlenc "$NAME · $name · XHTTP")
     if [ "${ANTIFREEZE:-0}" = 1 ] && [ -n "$XH_ENC" ]; then
-      echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=$(urlenc "$XH_ENC")&flow=xtls-rprx-vision&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=stream-one&extra=$(urlenc '{"xmux":{"maxConnections":2}}')#$label"
+      echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=$(urlenc "$XH_ENC")&flow=xtls-rprx-vision&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=stream-one&extra=$(urlenc '{"xmux":{"maxConnections":2,"hMaxReusableSecs":"300-600","hKeepAlivePeriod":20}}')#$label"
     else
       echo "xhttp vless://$uuid@$h:$XH_PORT?encryption=none&security=reality&sni=$SNI$alts&fp=$FP&pbk=$PUB&sid=$SID&type=xhttp&path=$(urlenc "$XH_PATH")&mode=auto#$label"
     fi

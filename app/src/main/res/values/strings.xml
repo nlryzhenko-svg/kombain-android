@@ -864,6 +864,8 @@
     <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — Kombain зайдёт на него и проверит соседей</string>
     <string name="srv_sni_searching">Проверяю сайты рядом с сервером…\nЭто до минуты, на сервере ничего не меняется.</string>
     <string name="srv_sp_hint">Выбранный сайт применится вместе с остальными настройками защиты по кнопке «Применить».</string>
+    <string name="ks_quic">Видео без зависаний (без QUIC)</string>
+    <string name="ks_quic_sum">YouTube и браузеры идут через обычный HTTPS вместо QUIC: на долгом просмотре видео не подвисает. Скорость не меняется</string>
     <string name="srv_sp_need">сначала укажите адрес сервера и пароль или ключ</string>
     <string name="srv_rot_new_site">Другие имена подберутся для нового сайта после «Применить».</string>
     <string name="srv_sp_current">Сейчас</string>

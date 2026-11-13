@@ -75,6 +75,12 @@
             app:key="kbSmartProto"
             app:summary="@string/ks_smart_sum"
             app:title="@string/ks_smart" />
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_baseline_refresh_24"
+            app:key="kbBlockQuic"
+            app:summary="@string/ks_quic_sum"
+            app:title="@string/ks_quic" />
         <Preference
             app:icon="@drawable/ic_baseline_battery_charging_full_24"
             app:key="ks_battery"

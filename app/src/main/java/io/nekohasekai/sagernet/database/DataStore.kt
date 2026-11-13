@@ -174,6 +174,8 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     // smart choice of the protocol per network: {"<network key>": {"id": profileId, "at": ms}}
     var kbSmartProto by configurationStore.boolean("kbSmartProto") { true }
     var kbNetMemory by configurationStore.string("kbNetMemory")
+    /** UDP 443 (QUIC) is refused, so YouTube and browsers use ordinary HTTPS over TCP — long videos don't hang */
+    var kbBlockQuic by configurationStore.boolean("kbBlockQuic") { true }
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

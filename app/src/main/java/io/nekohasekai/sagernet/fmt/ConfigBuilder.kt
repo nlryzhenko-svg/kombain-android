@@ -604,6 +604,14 @@ fun buildConfig(
             }
         }
 
+        // Kombain: refuse QUIC (UDP 443) — apps fall back to HTTPS over TCP at once; QUIC carried inside
+        // the tunnel tends to stall on long videos
+        if (!forTest && DataStore.kbBlockQuic) route.rules.add(0, Rule_DefaultOptions().apply {
+            network = listOf("udp")
+            port = listOf(443)
+            action = "reject"
+        })
+
         // Kombain: the own servers' subscriptions are always fetched directly — so new keys arrive even when the old ones stopped working
         if (!forTest) runCatching {
             val subs = SagerDatabase.groupDao.allGroups().mapNotNull { it.subscription?.link }

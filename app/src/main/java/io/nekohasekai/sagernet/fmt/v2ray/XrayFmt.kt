@@ -117,9 +117,16 @@ private fun StandardV2RayBean.xrayStreamSettings(serverNameOverride: String?): J
             if (path.isNotBlank()) put("path", path)
             if (host.isNotBlank()) put("host", host)
             put("mode", xhttpMode.orEmpty().ifBlank { "auto" })
-            xhttpExtra.orEmpty().takeIf { it.isNotBlank() }?.let { e ->
-                runCatching { JSONObject(e) }.getOrNull()?.let { put("extra", it) }
-            }
+            val extra = xhttpExtra.orEmpty().takeIf { it.isNotBlank() }
+                ?.let { e -> runCatching { JSONObject(e) }.getOrNull() } ?: JSONObject()
+            // Kombain: a long-lived connection gets silently "frozen" by DPI after a while (video hangs
+            // after ~15 min). New requests move to a fresh connection every 5–10 min, and an HTTP/2 ping
+            // every 20 s finds a dead one quickly.
+            val xmux = extra.optJSONObject("xmux") ?: JSONObject()
+            if (!xmux.has("hMaxReusableSecs")) xmux.put("hMaxReusableSecs", "300-600")
+            if (!xmux.has("hKeepAlivePeriod")) xmux.put("hKeepAlivePeriod", 20)
+            extra.put("xmux", xmux)
+            put("extra", extra)
         })
     }
 
