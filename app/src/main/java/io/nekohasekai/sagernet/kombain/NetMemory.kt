@@ -32,10 +32,24 @@ object NetMemory {
         val active = cm.activeNetwork
         val activeCaps = active?.let { cm.getNetworkCapabilities(it) }
         if (activeCaps != null && !activeCaps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return active
-        return cm.allNetworks.firstOrNull { n ->
-            val c = cm.getNetworkCapabilities(n) ?: return@firstOrNull false
-            !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        // inside the VPN process: the network the tunnel really goes over
+        io.nekohasekai.sagernet.SagerNet.underlyingNetwork?.let { u ->
+            val c = cm.getNetworkCapabilities(u)
+            if (c != null && !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return u
         }
+        // The VPN is up, so the active network is the VPN itself. The phone may be on Wi-Fi and mobile
+        // data at once (Samsung keeps mobile data "always on"): take the one Android itself would use —
+        // Wi-Fi, then cable, then mobile — and a validated one first, so the answer is the same
+        // with the VPN on and off.
+        fun rank(c: NetworkCapabilities) = (if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 0 else 10) + when {
+            c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 0
+            c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> 1
+            c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 2
+            else -> 3
+        }
+        return cm.allNetworks.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { n to it } }
+            .filter { (_, c) -> !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+            .minByOrNull { (_, c) -> rank(c) }?.first
     }
 
     private fun short(s: String) = MessageDigest.getInstance("SHA-256").digest(s.toByteArray())

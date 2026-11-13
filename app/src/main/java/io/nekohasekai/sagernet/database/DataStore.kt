@@ -176,6 +176,10 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var kbNetMemory by configurationStore.string("kbNetMemory")
     /** UDP 443 (QUIC) is refused, so YouTube and browsers use ordinary HTTPS over TCP — long videos don't hang */
     var kbBlockQuic by configurationStore.boolean("kbBlockQuic") { true }
+    /** Hysteria2 hops only over the ports found open on the current network */
+    var kbSmartHop by configurationStore.boolean("kbSmartHop") { true }
+    /** {"<network>|<server>|<range>": {"ports": [...], "tested": n, "at": ms}} */
+    var kbHopPorts by configurationStore.string("kbHopPorts")
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

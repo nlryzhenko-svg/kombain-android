@@ -14,6 +14,7 @@ import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.kombain.AutoPick
+import io.nekohasekai.sagernet.kombain.HopPorts
 import io.nekohasekai.sagernet.kombain.NetMemory
 import io.nekohasekai.sagernet.kombain.ServerNode
 import io.nekohasekai.sagernet.kombain.ServerStore
@@ -92,42 +93,36 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
     private class HopCheck(val verdict: String?, val turnOff: Boolean)
 
     /**
-     * Connects to Hysteria2 on the main port and on 12 random ports of the hopping range, one by one.
-     * When part of the range is filtered on the way, hopping lands on a dead port now and then:
-     * the connection fails to start or video stops for the length of one hop.
+     * Hysteria2 port hopping: tries ports of the range from this network (and the main port).
+     * When part of the range is filtered on the way, plain hopping lands on a dead port now and then;
+     * with «умные прыжки» the open ports are remembered for this network and used alone.
      */
-    private suspend fun checkHop(node: ServerNode, profiles: List<ProxyEntity>): HopCheck? {
-        val hy = profiles.firstOrNull { it.type == ProxyEntity.TYPE_HYSTERIA && it.hysteriaBean?.protocolVersion == 2 }
-            ?: return null
-        val bean = hy.hysteriaBean ?: return null
-        val a = node.hyHop.substringBefore('-').toIntOrNull() ?: return null
-        val b = node.hyHop.substringAfter('-').toIntOrNull() ?: return null
-        val ports = listOf(node.hyPort) + (a..b).shuffled().take(12)
+    private suspend fun checkHop(node: ServerNode, profiles: List<ProxyEntity>, net: NetMemory.Net?): HopCheck? {
+        val hy = profiles.firstOrNull { HopPorts.isHop(it.hysteriaBean) } ?: return null
         val row = onMainDispatcher { Row("Прыжки портов Hysteria2") }
-        onMainDispatcher { row.set(null, "проверяю ${ports.size - 1} портов из ${node.hyHop.replace("-", "–")}…") }
-        val copies = ports.mapIndexed { i, port ->
-            ProxyEntity(id = -100L - i, groupId = hy.groupId, type = hy.type).putBean(
-                (bean.clone() as io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean).apply { serverPorts = port.toString() }
-            )
-        }
-        val ok = runCatching { AutoPick.test(copies, persist = false).alive.map { it.first.id } }.getOrNull() ?: return null
-        val mainOk = copies[0].id in ok
-        val range = copies.drop(1)
-        val good = range.count { it.id in ok }
-        val dead = range.filter { it.id !in ok }.map { it.hysteriaBean!!.serverPorts }
-        val n = range.size
+        onMainDispatcher { row.set(null, "проверяю ${HopPorts.SAMPLE} портов из ${node.hyHop.replace("-", "–")}…") }
+        val found = runCatching { HopPorts.search(hy, net) }.getOrNull() ?: return null
+        val n = found.tested
+        val good = found.good.size
+        val mainOk = good == 0 && runCatching {
+            val main = ProxyEntity(id = -99L, groupId = hy.groupId, type = hy.type).putBean(
+                (hy.hysteriaBean!!.clone() as io.nekohasekai.sagernet.fmt.hysteria.HysteriaBean).apply { serverPorts = node.hyPort.toString() })
+            AutoPick.test(listOf(main), persist = false).alive.isNotEmpty()
+        }.getOrDefault(false)
         onMainDispatcher {
             row.set(good == n, when {
                 good == n -> "все $n портов открыты"
                 good == 0 -> "закрыты все $n портов" + if (mainOk) ", основной порт ${node.hyPort} работает" else ""
-                else -> "открыто $good из $n, режутся: ${dead.joinToString(", ")}"
+                else -> "открыто $good из $n"
             })
         }
+        val smart = DataStore.kbSmartHop
         return when {
-            good == n -> HopCheck(if (node.hop) "Прыжки портов Hysteria2 в этой сети работают: все проверенные порты открыты." else null, false)
-            !mainOk && good == 0 -> HopCheck("Hysteria2 не проходит ни на одном порту — эта сеть режет UDP к серверу. Используйте XHTTP, VLESS или Sudoku.", false)
-            good == 0 -> HopCheck("Диапазон прыжков ${node.hyHop.replace("-", "–")} закрыт целиком, а основной порт работает — скорее всего, его не пропускает файрвол хостера. Выключите прыжки портов.", node.hop)
-            else -> HopCheck("В этой сети режется часть портов диапазона прыжков ($good из $n открыты). Поэтому Hysteria2 с прыжками то подключается, то «нет связи», а видео подвисает секунд на 10, когда прыжок попадает на закрытый порт. Выключите прыжки — Hysteria2 будет работать на одном порту.", node.hop)
+            good == n -> HopCheck("Прыжки портов Hysteria2 в этой сети работают: все проверенные порты открыты.", false)
+            good == 0 && !mainOk -> HopCheck("Hysteria2 не проходит ни на одном порту — эта сеть режет UDP к серверу. Используйте XHTTP, VLESS или Sudoku.", false)
+            good == 0 -> HopCheck("Диапазон прыжков ${node.hyHop.replace("-", "–")} закрыт целиком, а основной порт работает — скорее всего, его не пропускает файрвол хостера. Выключите прыжки портов.", true)
+            smart -> HopCheck("В этой сети открыта только часть портов прыжков ($good из $n). Kombain запомнил открытые порты для «${net?.label ?: "этой сети"}» и Hysteria2 прыгает только по ним — без «нет связи» и подвисаний.", false)
+            else -> HopCheck("В этой сети режется часть портов прыжков ($good из $n открыты) — Hysteria2 то подключается, то нет, а видео подвисает секунд на 10. Включите «Умные прыжки портов» в настройках или выключите прыжки.", true)
         }
     }
 
@@ -190,7 +185,7 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
             if (best != null) NetMemory.remember(best.id, net)
 
             // Hysteria2 port hopping: are all ports of the range open from this network?
-            val hop = node?.takeIf { it.hyHop.contains('-') }?.let { n -> checkHop(n, profiles) }
+            val hop = node?.takeIf { it.hyHop.contains('-') }?.let { n -> checkHop(n, profiles, net) }
 
             val udpAll = profiles.filter { isUdp(it) }
             val udpDead = udpAll.isNotEmpty() && alive.none { isUdp(it.first) }

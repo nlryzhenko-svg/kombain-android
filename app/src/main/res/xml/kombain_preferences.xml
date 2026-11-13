@@ -77,6 +77,12 @@
             app:title="@string/ks_smart" />
         <SwitchPreference
             app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_auto"
+            app:key="kbSmartHop"
+            app:summary="@string/ks_smart_hop_sum"
+            app:title="@string/ks_smart_hop" />
+        <SwitchPreference
+            app:defaultValue="true"
             app:icon="@drawable/ic_baseline_refresh_24"
             app:key="kbBlockQuic"
             app:summary="@string/ks_quic_sum"

@@ -103,6 +103,7 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         findPreference<Preference>(Key.ACQUIRE_WAKE_LOCK)!!.onPreferenceChangeListener = reload
         findPreference<Preference>(Key.NETWORK_CHANGE_RESET_CONNECTIONS)!!.onPreferenceChangeListener = reload
         findPreference<Preference>("kbBlockQuic")?.onPreferenceChangeListener = reload
+        findPreference<Preference>("kbSmartHop")?.onPreferenceChangeListener = reload
 
         findPreference<SimpleMenuPreference>(Key.REMOTE_DNS)!!.apply {
             value = DataStore.remoteDns

@@ -320,7 +320,9 @@ fun buildSingBoxOutboundHysteriaBean(bean: HysteriaBean): SingBoxOptions.SingBox
             if (port != null) {
                 server_port = port
             } else {
-                server_ports = hopPortsToSingboxList(bean.serverPorts)
+                // Kombain: only the ports found open on this network
+                server_ports = io.nekohasekai.sagernet.kombain.HopPorts.serverPorts(bean)
+                    ?: hopPortsToSingboxList(bean.serverPorts)
             }
             hop_interval = "${bean.hopInterval}s"
             up_mbps = bean.uploadMbps

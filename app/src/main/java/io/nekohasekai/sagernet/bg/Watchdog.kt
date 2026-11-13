@@ -69,6 +69,7 @@ object Watchdog {
         var fails = 0
         var remembered = false
         var net = NetMemory.current()
+        if (searchHopPorts(service, net, force = false)) return
         while (true) {
             if (service.data.state != BaseService.State.Connected) return
             if (!DataStore.kbWatchdog) return
@@ -83,6 +84,7 @@ object Watchdog {
                     switchTo(service, known, app.getString(R.string.kb_wd_net, now.label))
                     return
                 }
+                if (searchHopPorts(service, now, force = false)) return
             }
             if (deviceIdle() || !phoneOnline()) {
                 fails = 0
@@ -113,6 +115,8 @@ object Watchdog {
                     delay(INTERVAL)
                     continue
                 }
+                // Hysteria2 with hopping: maybe the hops land on ports this network filters
+                if (searchHopPorts(service, net, force = true)) return
                 recover(service)
                 return
             }
@@ -155,6 +159,32 @@ object Watchdog {
             }
         }
         return false
+    }
+
+    /**
+     * «Умные прыжки»: finds the open hopping ports of the current Hysteria2 profile on this network.
+     * Returns true when the connection was restarted to use them.
+     */
+    private suspend fun searchHopPorts(service: BaseService.Interface, net: NetMemory.Net?, force: Boolean): Boolean {
+        if (!DataStore.kbSmartHop || net == null) return false
+        val id = DataStore.currentProfile.takeIf { it > 0 } ?: DataStore.selectedProxy
+        val p = SagerDatabase.proxyDao.getById(id) ?: return false
+        val bean = p.hysteriaBean ?: return false
+        if (!io.nekohasekai.sagernet.kombain.HopPorts.isHop(bean)) return false
+        if (!force && !io.nekohasekai.sagernet.kombain.HopPorts.needsSearch(bean, net)) return false
+        val before = io.nekohasekai.sagernet.kombain.HopPorts.serverPorts(bean)
+        log("ищу открытые порты прыжков Hysteria2 в сети «${net.label}»")
+        val found = runCatching { io.nekohasekai.sagernet.kombain.HopPorts.search(p, net) }
+            .onFailure { Logs.w(it) }.getOrNull() ?: return false
+        val after = io.nekohasekai.sagernet.kombain.HopPorts.serverPorts(bean)
+        if (after == null || after == before) return false
+        val text = app.getString(R.string.kb_wd_hop, found.good.size, found.tested)
+        log(text)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(app, text, Toast.LENGTH_LONG).show()
+            if (service.data.state == BaseService.State.Connected) service.stopRunner(true)
+        }
+        return true
     }
 
     private suspend fun switchTo(service: BaseService.Interface, id: Long, message: String) {
