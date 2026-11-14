@@ -58,7 +58,7 @@ jobs:
         run: bash buildScript/ci-apk.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Kombain-${{ env.VERSION }}
+          name: DAK-${{ env.VERSION }}
           path: out/*.apk
       - name: Релиз
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release
@@ -67,5 +67,5 @@ jobs:
         run: |
           tag=${GITHUB_REF_NAME}
           [[ $tag == v* ]] || tag="v$VERSION"
-          gh release create "$tag" out/*.apk --title "Kombain $VERSION" --notes "Kombain $VERSION" --target "$GITHUB_SHA" \
+          gh release create "$tag" out/*.apk --title "DAK $VERSION" --notes "DAK $VERSION" --target "$GITHUB_SHA" \
             || gh release upload "$tag" out/*.apk --clobber

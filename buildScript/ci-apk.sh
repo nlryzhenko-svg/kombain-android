@@ -28,7 +28,7 @@ ver=$(grep '^VERSION_NAME=' nb4a.properties | cut -d= -f2)
 mkdir -p out
 for apk in $(find app/build/outputs/apk -name '*.apk'); do
   abi=$(basename "$apk" .apk | grep -oE 'arm64-v8a|armeabi-v7a|x86_64|x86|universal' || echo all)
-  cp "$apk" "out/Kombain-$ver-$abi.apk"
+  cp "$apk" "out/DAK-$ver-$abi.apk"
 done
 [ -n "${GITHUB_ACTIONS:-}" ] && rm -f release.keystore local.properties
 ls -l out

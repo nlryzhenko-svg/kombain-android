@@ -12,15 +12,16 @@ import io.nekohasekai.sagernet.BuildConfig
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
-import libcore.Libcore
-import moe.matsuri.nb4a.utils.Util
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
 /**
- * Updates of DAK itself: new versions are published as GitHub releases of the app's repository
- * (tag v4.1.0, files DAK-4.1.0-arm64-v8a.apk …). Downloads go through the VPN when it is on.
+ * Updates of DAK itself: the newest version lies in the «updates» branch of the app's repository
+ * (latest.json + DAK-4.1.0-arm64-v8a.apk …), GitHub releases are asked too. With DAK running the requests
+ * go through its local proxy, i.e. through the VPN; every request has a time limit.
  * Android refuses an update signed with another key, so a foreign APK can't replace DAK.
  */
 object Updater {
@@ -49,19 +50,56 @@ object Updater {
 
     val current: String get() = BuildConfig.VERSION_NAME
 
-    private fun client() = Libcore.newHttpClient().apply {
-        modernTLS(); keepAlive()
-        if (DataStore.serviceState.started) trySocks5(DataStore.mixedPort)
+    private fun client(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(if (downloading) 15 else 1, java.util.concurrent.TimeUnit.MINUTES)
+        .apply {
+            if (DataStore.serviceState.started) proxy(java.net.Proxy(java.net.Proxy.Type.SOCKS,
+                java.net.InetSocketAddress("127.0.0.1", DataStore.mixedPort)))
+        }
+        .build()
+
+    @Volatile private var downloading = false
+
+    private fun get(url: String): String {
+        val req = Request.Builder().url(url).header("User-Agent", "DAK/$current").build()
+        client().newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) error("сервер обновлений ответил ${resp.code}")
+            return resp.body?.string().orEmpty()
+        }
     }
 
-    /** The newest release when it is newer than this app; null otherwise. Throws on network errors. */
+    private const val CHANNEL = "https://raw.githubusercontent.com/$REPO/updates"
+
+    /**
+     * The newest version when it is newer than this app; null otherwise. Two places are asked: the «updates»
+     * branch of the repository (latest.json + APKs) and GitHub releases; the newer one wins.
+     * Throws when neither could be read.
+     */
     fun check(): Release? {
-        val client = client()
-        try {
-            val r = JSONObject(Util.getStringBox(client.newRequest().apply {
-                setURL("https://api.github.com/repos/$REPO/releases/latest")
-            }.execute().contentString))
-            DataStore.kbUpdateChecked = System.currentTimeMillis()
+        val a = runCatching { fromChannel() }.onFailure { android.util.Log.w("DAK-Update", "channel: $it") }
+        val b = runCatching { fromReleases() }.onFailure { android.util.Log.w("DAK-Update", "releases: $it") }
+        if (a.isFailure && b.isFailure) throw a.exceptionOrNull()!!
+        DataStore.kbUpdateChecked = System.currentTimeMillis()
+        return listOfNotNull(a.getOrNull(), b.getOrNull()).maxWithOrNull { x, y ->
+            if (newer(x.version, y.version)) 1 else if (newer(y.version, x.version)) -1 else 0
+        }
+    }
+
+    /** latest.json: {"version", "notes", "apks": {"arm64-v8a": {"file", "size", "sha256"}, …}} */
+    private fun fromChannel(): Release? {
+        val j = JSONObject(get("$CHANNEL/latest.json?t=${System.currentTimeMillis() / 600_000}"))
+        val version = j.optString("version")
+        if (version.isBlank() || !newer(version, current)) return null
+        val apk = j.optJSONObject("apks")?.optJSONObject(abi()) ?: return null
+        return Release(version, j.optString("notes"), "$CHANNEL/" + apk.getString("file"),
+            apk.optLong("size"), apk.optString("sha256").takeIf { it.length == 64 })
+    }
+
+    private fun fromReleases(): Release? {
+        run {
+            val r = JSONObject(get("https://api.github.com/repos/$REPO/releases/latest"))
             val version = r.optString("tag_name").removePrefix("v")
             if (version.isBlank() || !newer(version, current)) return null
             val assets = r.optJSONArray("assets") ?: return null
@@ -77,8 +115,6 @@ object Updater {
                 }
             }
             return null
-        } finally {
-            client.close()
         }
     }
 
@@ -91,11 +127,15 @@ object Updater {
     fun download(r: Release): File {
         dir().listFiles()?.forEach { it.delete() }
         val file = File(dir(), "DAK-${r.version}.apk")
-        val client = client()
+        downloading = true
         try {
-            client.newRequest().apply { setURL(r.url) }.execute().writeTo(file.canonicalPath)
+            client().newCall(Request.Builder().url(r.url).header("User-Agent", "DAK/$current").build()).execute().use { resp ->
+                if (!resp.isSuccessful) error("сервер обновлений ответил ${resp.code}")
+                val body = resp.body ?: error("пустой ответ")
+                file.outputStream().use { out -> body.byteStream().copyTo(out, 1 shl 16) }
+            }
         } finally {
-            client.close()
+            downloading = false
         }
         if (!file.exists() || file.length() < 1_000_000 || (r.size > 0 && file.length() != r.size)) {
             file.delete(); error("файл скачался не полностью")

@@ -16,10 +16,16 @@ object UpdateDialog {
 
     /** [manual]: from the button — also says when there is nothing new or the check failed. */
     fun check(activity: MainActivity, manual: Boolean) {
-        if (busy) return
+        if (busy) {
+            if (manual) activity.snackbar("Проверяю обновления…").show()
+            return
+        }
         busy = true
+        if (manual) activity.snackbar("Проверяю обновления…").show()
         runOnDefaultDispatcher {
+            android.util.Log.i("DAK-Update", "check start manual=$manual")
             val r = runCatching { Updater.check() }
+            android.util.Log.i("DAK-Update", "check done: ${r.getOrNull()?.version} ${r.exceptionOrNull()}")
             onMainDispatcher {
                 busy = false
                 if (activity.isFinishing) return@onMainDispatcher
