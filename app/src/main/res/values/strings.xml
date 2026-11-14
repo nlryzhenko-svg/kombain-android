@@ -880,6 +880,15 @@
     <string name="da_search">Поиск по названию</string>
     <string name="ks_bank_on">Включено · напрямую: %d прил.</string>
     <string name="ks_bank_off">Выключено — все приложения через VPN</string>
+    <string name="ks_cat_security">Безопасность</string>
+    <string name="ks_applock">Вход по отпечатку</string>
+    <string name="ks_applock_sum">DAK открывается только после отпечатка, лица или PIN телефона — пароли серверов и управление ими не увидит никто, кроме вас. VPN при этом работает как обычно</string>
+    <string name="ks_applock_none">На телефоне не настроены отпечаток или блокировка экрана — сначала включите их в настройках Android</string>
+    <string name="ks_leaks_sum">Не утекает ли ваш настоящий IP мимо VPN: адрес, IPv6, DNS, WebRTC, браузеры</string>
+    <string name="leak_title">Проверка утечек</string>
+    <string name="leak_intro">DAK проверит, что видят сайты, пока VPN включён: ваш адрес по IPv4 и IPv6, какие DNS-серверы узнают адреса сайтов, что покажет WebRTC в браузере и не идёт ли какой-то браузер мимо VPN. Это займёт около 20 секунд.</string>
+    <string name="more_leaks">Проверка утечек</string>
+    <string name="more_leaks_sub">Не виден ли ваш IP</string>
     <string name="ks_autoupdate">Обновлять DAK</string>
     <string name="ks_autoupdate_sum">Два раза в день проверяет новую версию и присылает уведомление — обновление в одно касание, серверы и настройки сохраняются</string>
     <string name="ks_update_now">Проверить обновление сейчас</string>

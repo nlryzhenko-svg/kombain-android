@@ -187,6 +187,8 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     /** «Приложения мимо VPN»: built-in apps the user unticked, apps the user added (package names, one per line) */
     var kbDirectOff by configurationStore.string("kbDirectOff")
     var kbDirectExtra by configurationStore.string("kbDirectExtra")
+    /** «Вход по отпечатку» */
+    var kbAppLock by configurationStore.boolean("kbAppLock") { false }
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

@@ -103,6 +103,21 @@
             app:title="@string/ks_netreset" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/ks_cat_security">
+        <SwitchPreference
+            app:defaultValue="false"
+            app:icon="@drawable/ic_baseline_lock_24"
+            app:key="kbAppLock"
+            app:persistent="false"
+            app:summary="@string/ks_applock_sum"
+            app:title="@string/ks_applock" />
+        <Preference
+            app:icon="@drawable/ic_kombain_shield_check"
+            app:key="ks_leaks"
+            app:summary="@string/ks_leaks_sum"
+            app:title="@string/leak_title" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/ks_cat_upkeep">
         <SwitchPreference
             app:defaultValue="true"

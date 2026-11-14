@@ -20,6 +20,7 @@ object MoreSheet {
     private val items = listOf(
         Item(R.drawable.ic_kombain_server, R.string.more_servers, R.string.more_servers_sub) { it.displayFragment(MyServersFragment()) },
         Item(R.drawable.ic_kombain_speed, R.string.more_diag, R.string.more_diag_sub) { it.displayFragment(DiagnosticsFragment()) },
+        Item(R.drawable.ic_kombain_shield_check, R.string.more_leaks, R.string.more_leaks_sub) { it.displayFragment(LeakCheckFragment()) },
         Item(R.drawable.ic_kombain_folders, R.string.more_groups, R.string.more_groups_sub) { it.displayFragment(GroupFragment()) },
         Item(R.drawable.ic_kombain_log, R.string.more_log, R.string.more_log_sub) { it.displayFragment(LogcatFragment()) },
         Item(R.drawable.ic_kombain_tools, R.string.more_tools, R.string.more_tools_sub) { it.displayFragment(ToolsFragment()) },

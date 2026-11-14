@@ -43,7 +43,7 @@ object RuApps {
         )),
         Category("Кино, музыка и прочее", listOf(
             "ru.kinopoisk", "ru.ivi.client", "ru.more.play", "ru.okko.app", "ru.yandex.music", "com.vk.vkvideo",
-            "ru.yandex.searchplugin", "com.yandex.browser",
+
         )),
     )
 

@@ -583,10 +583,12 @@ class MainActivity : ThemedActivity(),
     override fun onStart() {
         connection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND)
         super.onStart()
+        io.nekohasekai.sagernet.kombain.AppLock.check(this)
     }
 
     override fun onStop() {
         connection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_BACKGROUND)
+        io.nekohasekai.sagernet.kombain.AppLock.onStop()
         super.onStop()
     }
 

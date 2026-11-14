@@ -151,6 +151,24 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         val upkeep = Preference.OnPreferenceChangeListener { _, _ ->
             runOnDefaultDispatcher { io.nekohasekai.sagernet.kombain.Maintenance.schedule() }; true
         }
+        findPreference<SwitchPreference>("kbAppLock")!!.apply {
+            isChecked = DataStore.kbAppLock
+            setOnPreferenceChangeListener { _, value ->
+                val act = activity ?: return@setOnPreferenceChangeListener false
+                val on = value as Boolean
+                if (!io.nekohasekai.sagernet.kombain.AppLock.available(act)) {
+                    (act as? MainActivity)?.snackbar(getString(R.string.ks_applock_none))?.show()
+                    return@setOnPreferenceChangeListener false
+                }
+                io.nekohasekai.sagernet.kombain.AppLock.confirm(act, if (on) "Включить вход по отпечатку" else "Выключить вход по отпечатку") { ok ->
+                    if (ok) { DataStore.kbAppLock = on; isChecked = on }
+                }
+                false
+            }
+        }
+        findPreference<Preference>("ks_leaks")!!.setOnPreferenceClickListener {
+            (activity as? MainActivity)?.displayFragment(LeakCheckFragment()); true
+        }
         findPreference<Preference>("ks_update_now")!!.apply {
             summary = getString(R.string.ab_version_now, io.nekohasekai.sagernet.kombain.Updater.current)
             setOnPreferenceClickListener {
