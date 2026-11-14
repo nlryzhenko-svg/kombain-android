@@ -291,20 +291,20 @@
 
     <color name="preference_simple_menu_background">#FAFAFA</color>
 
-    <color name="kombain_primary">#0E3B43</color>
-    <color name="kombain_primary_dark">#082A30</color>
-    <color name="kombain_accent">#0FA97A</color>
-    <color name="kombain_100">#CFF5E8</color>
-    <color name="kombain_300">#6FDDB8</color>
-    <color name="kombain_fab">#0FA97A</color>
-    <color name="kombain_bg">#F2F6F5</color>
+    <color name="kombain_primary">#1C1617</color>
+    <color name="kombain_primary_dark">#0B0909</color>
+    <color name="kombain_accent">#D7262E</color>
+    <color name="kombain_100">#FFDCDA</color>
+    <color name="kombain_300">#FF8A85</color>
+    <color name="kombain_fab">#D7262E</color>
+    <color name="kombain_bg">#F7F3F2</color>
     <color name="kombain_tile">#FFFFFF</color>
-    <color name="kombain_tile_stroke">#1F0E3B43</color>
-    <color name="kombain_text">#0B2A2F</color>
-    <color name="kombain_text2">#5B7176</color>
-    <color name="kombain_card">#0E8F69</color>
-    <color name="kombain_card_off">#3E5459</color>
-    <color name="kombain_on_card">#F1FFF9</color>
-    <color name="kombain_danger">#E5534B</color>
+    <color name="kombain_tile_stroke">#1F1C1617</color>
+    <color name="kombain_text">#1C1213</color>
+    <color name="kombain_text2">#6F5E5F</color>
+    <color name="kombain_card">#C21F27</color>
+    <color name="kombain_card_off">#3A3132</color>
+    <color name="kombain_on_card">#FFF6F5</color>
+    <color name="kombain_danger">#FF6B3D</color>
     <bool name="kombain_light_bars">true</bool>
 </resources>
