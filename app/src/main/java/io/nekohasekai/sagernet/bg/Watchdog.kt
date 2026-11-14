@@ -58,7 +58,7 @@ object Watchdog {
         job = null
     }
 
-    private fun log(msg: String) = Logs.w("[Kombain] сторож: $msg")
+    private fun log(msg: String) = Logs.w("[DAK] сторож: $msg")
 
     private suspend fun loop(service: BaseService.Interface) {
         // after several recoveries in a short time, back off so we don't flap

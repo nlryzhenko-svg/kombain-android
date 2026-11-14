@@ -121,7 +121,7 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
             good == n -> HopCheck("Прыжки портов Hysteria2 в этой сети работают: все проверенные порты открыты.", false)
             good == 0 && !mainOk -> HopCheck("Hysteria2 не проходит ни на одном порту — эта сеть режет UDP к серверу. Используйте XHTTP, VLESS или Sudoku.", false)
             good == 0 -> HopCheck("Диапазон прыжков ${node.hyHop.replace("-", "–")} закрыт целиком, а основной порт работает — скорее всего, его не пропускает файрвол хостера. Выключите прыжки портов.", true)
-            smart -> HopCheck("В этой сети открыта только часть портов прыжков ($good из $n). Kombain запомнил открытые порты для «${net?.label ?: "этой сети"}» и Hysteria2 прыгает только по ним — без «нет связи» и подвисаний.", false)
+            smart -> HopCheck("В этой сети открыта только часть портов прыжков ($good из $n). DAK запомнил открытые порты для «${net?.label ?: "этой сети"}» и Hysteria2 прыгает только по ним — без «нет связи» и подвисаний.", false)
             else -> HopCheck("В этой сети режется часть портов прыжков ($good из $n открыты) — Hysteria2 то подключается, то нет, а видео подвисает секунд на 10. Включите «Умные прыжки портов» в настройках или выключите прыжки.", true)
         }
     }
@@ -200,7 +200,7 @@ class DiagnosticsFragment : ToolbarFragment(R.layout.layout_diagnostics) {
                     else -> {
                         append("Лучше всего здесь работает «${best.displayName()}» (${alive.first().second} мс).")
                         if (udpDead && tcpAlive) append("\n\nUDP в этой сети режется: Hysteria2 и TUIC не проходят — используйте XHTTP, VLESS или Sudoku.")
-                        if (DataStore.kbSmartProto) append("\n\nKombain запомнил это для сети «${net?.label ?: "?"}» и в следующий раз выберет его сам.")
+                        if (DataStore.kbSmartProto) append("\n\nDAK запомнил это для сети «${net?.label ?: "?"}» и в следующий раз выберет его сам.")
                     }
                 }
                 if (!foreign && best != null) append("\n\nНапрямую ${if (ru) "зарубежные сайты" else "сайты"} не открываются, а через VPN — да.")

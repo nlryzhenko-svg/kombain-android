@@ -85,7 +85,7 @@ object HopPorts {
                 .put("at", System.currentTimeMillis()))
             DataStore.kbHopPorts = m.toString()
         }
-        Logs.i("[Kombain] Hysteria2 в сети «${net?.label}»: открыто ${good.size} из ${ports.size} портов прыжков")
+        Logs.i("[DAK] Hysteria2 в сети «${net?.label}»: открыто ${good.size} из ${ports.size} портов прыжков")
         return Found(good, ports.size)
     }
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Kombain</string>
-    <string name="app_name_long" translatable="false">Kombain — VPN-комбайн</string>
+    <string name="app_name" translatable="false">DAK</string>
+    <string name="app_name_long" translatable="false">DAK — свой VPN</string>
     <string name="app_desc">The universal proxy toolchain for Android, written in Kotlin.</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
@@ -19,7 +19,7 @@
     <string name="quick_toggle">Toggle</string>
     <string name="quick_enable">Enable</string>
     <string name="quick_disable">Disable</string>
-    <string name="tile_title">Kombain</string>
+    <string name="tile_title">DAK</string>
     <string name="menu_traffic">Traffic</string>
     <string name="menu_dashboard">sing-box Dashboard</string>
     <!-- externel -->
@@ -579,7 +579,7 @@
     <string name="app_list_permission_denied">Unable to read installed apps.\nThis is usually because the system has restricted app read permissions.\nPlease grant permissions in the system settings.</string>
     <string name="open_app_settings">Open System Settings</string>
 
-    <!-- Kombain -->
+    <!-- DAK -->
     <string name="menu_hotspot">Раздача</string>
     <string name="hotspot_title">Раздача VPN</string>
     <string name="hotspot_subtitle">Устройства, подключённые к точке доступа этого телефона, смогут ходить в интернет через ваш VPN.</string>
@@ -595,7 +595,7 @@
     <string name="hotspot_hint_ready">Готово · %1$s (%2$s)</string>
     <string name="hotspot_copy">Копировать</string>
     <string name="hotspot_qr">QR-код</string>
-    <string name="hotspot_qr_name">Раздача Kombain</string>
+    <string name="hotspot_qr_name">Раздача DAK</string>
     <string name="hotspot_copied">Адрес скопирован</string>
     <string name="hotspot_reloading">Перезапускаю VPN с новыми настройками…</string>
     <string name="hotspot_refresh">Обновить</string>
@@ -608,7 +608,7 @@
     <string name="hotspot_step1">1. Включите точку доступа на этом телефоне.</string>
     <string name="hotspot_open_settings">Открыть настройки точки доступа</string>
     <string name="hotspot_step2">2. На другом устройстве подключитесь к этой Wi-Fi сети, откройте её свойства → «Прокси» → «Вручную» и впишите адрес и порт выше. Так работает браузер и большинство приложений (Android, iPhone, Windows, macOS, телевизоры).</string>
-    <string name="hotspot_step3">3. Нужен весь трафик, включая игры и звонки? Поставьте на другой телефон Kombain или v2rayNG и отсканируйте QR-код — он подключится к этому телефону как SOCKS5-сервер.</string>
+    <string name="hotspot_step3">3. Нужен весь трафик, включая игры и звонки? Поставьте на другой телефон DAK или v2rayNG и отсканируйте QR-код — он подключится к этому телефону как SOCKS5-сервер.</string>
     <string name="hotspot_note">Прокси открыт для всех устройств в этой сети. Выключайте раздачу, когда она не нужна, особенно в чужом Wi-Fi.</string>
     <string name="awg_category">AmneziaWG (обход DPI)</string>
     <string name="awg_params">Параметры обфускации</string>
@@ -651,7 +651,7 @@
     <string name="ks_ads">Блокировать рекламу и трекеры</string>
     <string name="ks_ads_sum">Режет рекламные домены для всех приложений</string>
     <string name="ks_dns">DNS-сервер</string>
-    <string name="ks_battery">Не усыплять Kombain</string>
+    <string name="ks_battery">Не усыплять DAK</string>
     <string name="ks_battery_on">Готово: система не будет выгружать VPN</string>
     <string name="ks_battery_off">Нажмите — разрешите работать в фоне (важно для Samsung)</string>
     <string name="ks_wakelock">Держать процессор активным</string>
@@ -671,26 +671,26 @@
     <string name="ks_rules_updated">Готово, правила применены</string>
     <string name="ks_title">Настройки</string>
     <string name="ks_help_ok">Понятно</string>
-    <string name="kh_isAutoConnect">После перезагрузки телефона Kombain сам включит VPN с последним выбранным сервером. Удобно, если VPN нужен всегда.</string>
-    <string name="kh_serviceMode">«VPN» — через туннель идёт весь телефон, так работает почти всегда.\n\n«Только прокси» — VPN не включается, Kombain лишь открывает локальный прокси (порт в «Раздаче»). Нужен редко: если другой VPN уже занят или вы настраиваете прокси вручную.</string>
+    <string name="kh_isAutoConnect">После перезагрузки телефона DAK сам включит VPN с последним выбранным сервером. Удобно, если VPN нужен всегда.</string>
+    <string name="kh_serviceMode">«VPN» — через туннель идёт весь телефон, так работает почти всегда.\n\n«Только прокси» — VPN не включается, DAK лишь открывает локальный прокси (порт в «Раздаче»). Нужен редко: если другой VPN уже занят или вы настраиваете прокси вручную.</string>
     <string name="kh_ks_apps">Можно пустить через VPN не всё. Например, только Telegram и YouTube, а банки и игры — напрямую. Или наоборот: всё через VPN, кроме выбранных.</string>
     <string name="kh_bypassLan">Адреса домашней сети (192.168.x.x и т. п.) пойдут мимо VPN. Без этого может не открываться админка роутера, не печатать принтер или не видеть телевизор.</string>
     <string name="kh_ks_ru_direct">Российские сайты и сервисы будут открываться без VPN — быстрее, и они не ругаются на иностранный IP (Госуслуги, банки, маркетплейсы). Всё остальное идёт через VPN.\n\nТехнически это правило в «Маршрутах»: geosite:category-ru и geoip:ru → напрямую.</string>
     <string name="kh_ks_block_ads">Запросы к рекламным и следящим доменам будут блокироваться во всех приложениях. Если какое-то приложение начнёт работать странно — выключите.\n\nПравило в «Маршрутах»: geosite:category-ads-all → блок.</string>
     <string name="kh_remoteDns">DNS превращает адрес сайта в IP. Запросы идут через VPN, поэтому провайдер их не видит.\n\nAdGuard дополнительно режет рекламу. Если сайты открываются медленно — попробуйте Cloudflare.</string>
-    <string name="kh_ks_battery">Samsung и другие Android агрессивно выгружают фоновые приложения, и VPN «отваливается». Разрешите Kombain работать без ограничений батареи — это главный способ сделать VPN стабильным.</string>
+    <string name="kh_ks_battery">Samsung и другие Android агрессивно выгружают фоновые приложения, и VPN «отваливается». Разрешите DAK работать без ограничений батареи — это главный способ сделать VPN стабильным.</string>
     <string name="kh_acquireWakeLock">Не даёт процессору засыпать, пока включён VPN. Включайте, только если соединение рвётся при выключенном экране, — батарея садится чуть быстрее.</string>
     <string name="kh_networkChangeResetConnections">Когда телефон переключается между Wi-Fi и мобильным интернетом, старые соединения сбрасываются, и приложения сразу переподключаются. Лучше не выключать.</string>
     <string name="kh_nightTheme">Как в системе, всегда тёмная, всегда светлая или по времени суток.</string>
-    <string name="kh_appTheme">Цвет кнопок, выделения и акцентов. Фирменный цвет Kombain — последний в списке.</string>
+    <string name="kh_appTheme">Цвет кнопок, выделения и акцентов. Фирменный цвет DAK — последний в списке.</string>
     <string name="kh_connectionTestURL">Адрес, по которому меряется пинг при нажатии на карточку подключения. Если пинг не проходит, а сайты открываются — смените адрес.</string>
     <string name="kh_logLevel">Сколько писать в журнал (Ещё → Журналы). Для поиска проблем ставьте «Подробный», в обычной жизни — «Только ошибки», так меньше нагрузка.</string>
     <string name="srv_title">Мои серверы</string>
     <string name="srv_new">Поднять сервер</string>
     <string name="srv_hero_title">Свой VPN-сервер</string>
-    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. Kombain сам поставит VLESS Reality, XHTTP, Hysteria2, TUIC, Sudoku и прокси для Telegram, настроит и добавит профили. Свой домен не нужен.</string>
+    <string name="srv_hero_text">Нужен только VPS с Debian или Ubuntu и доступ по SSH. DAK сам поставит VLESS Reality, XHTTP, Hysteria2, TUIC, Sudoku и прокси для Telegram, настроит и добавит профили. Свой домен не нужен.</string>
     <string name="srv_list_title">Ваши серверы</string>
-    <string name="srv_empty">Пока нет серверов, поднятых через Kombain.</string>
+    <string name="srv_empty">Пока нет серверов, поднятых через DAK.</string>
     <string name="srv_busy">Дождитесь окончания текущей операции</string>
     <string name="srv_log_title">Журнал</string>
     <string name="srv_log_running">Выполняется…</string>
@@ -708,7 +708,7 @@
     <string name="srv_user_hint">Например: Мама, Ноутбук</string>
     <string name="srv_user_msg">Для каждого устройства или человека — свой пользователь, так проще отключить одного, не трогая остальных.</string>
     <string name="srv_add">Добавить</string>
-    <string name="srv_m_uninstall">Удалить Kombain с сервера</string>
+    <string name="srv_m_uninstall">Удалить DAK с сервера</string>
     <string name="srv_m_forget">Убрать из списка (сервер не трогать)</string>
     <string name="srv_uninstall_confirm">Службы VPN на «%s» будут остановлены и удалены. Все профили этого сервера перестанут работать.</string>
     <string name="srv_m_uninstall_yes">Удалить</string>
@@ -735,7 +735,7 @@
     <string name="srv_p_hy2">Hysteria2 — быстрый на плохих сетях (UDP)</string>
     <string name="srv_vless_port">Порт VLESS (TCP)</string>
     <string name="srv_hy_port">Порт Hysteria2 (UDP)</string>
-    <string name="srv_note">Kombain зайдёт на сервер по SSH, скачает Xray, Hysteria2, sing-box (для TUIC) и mtg (для Telegram) с GitHub, создаст ключи, откроет порты и запустит службы. Выбранные порты должны быть свободны (не заняты сайтом или другим VPN). Пароль хранится на телефоне в зашифрованном виде.</string>
+    <string name="srv_note">DAK зайдёт на сервер по SSH, скачает Xray, Hysteria2, sing-box (для TUIC) и mtg (для Telegram) с GitHub, создаст ключи, откроет порты и запустит службы. Выбранные порты должны быть свободны (не заняты сайтом или другим VPN). Пароль хранится на телефоне в зашифрованном виде.</string>
     <string name="srv_install">Установить</string>
     <string name="srv_err_host">Укажите IP или домен</string>
     <string name="srv_err_auth">Нужен пароль или ключ SSH</string>
@@ -754,7 +754,7 @@
     <string name="more_tools">Резервная копия</string>
     <string name="more_tools_sub">Сохранить и восстановить всё</string>
     <string name="more_help_sub">Ответы на вопросы</string>
-    <string name="more_about">О Kombain</string>
+    <string name="more_about">О DAK</string>
     <string name="more_about_sub">Версия и лицензии</string>
     <string name="kb_actions">Действия</string>
     <string name="kb_act_edit">Изменить</string>
@@ -767,7 +767,7 @@
     <string name="kb_add_qr">Сканировать QR-код</string>
     <string name="kb_add_file">Из файла</string>
     <string name="kb_add_file_sub">.conf WireGuard / Amnezia, .json</string>
-    <string name="kb_add_server_sub">Kombain сам настроит VPS по SSH</string>
+    <string name="kb_add_server_sub">DAK сам настроит VPS по SSH</string>
     <string name="kb_add_manual">Создать вручную</string>
     <string name="kb_add_manual_sub">Выбрать протокол и заполнить поля</string>
     <string name="ab_tagline">Все протоколы, свои серверы и раздача — в одном приложении</string>
@@ -775,7 +775,7 @@
     <string name="ab_battery">Не ограничивать в фоне</string>
     <string name="ab_battery_sub">Android может отключать VPN для экономии заряда. Нажмите, чтобы разрешить работу в фоне.</string>
     <string name="ab_license">Лицензия</string>
-    <string name="ab_license_text">Kombain — свободное приложение на лицензии GPL-3.0. Основано на NekoBox for Android (MatsuriDayo) и ядре sing-box; для VLESS Reality используется Xray-core, для AmneziaWG — amneziawg-go. Шрифт Onest — SIL OFL 1.1.</string>
+    <string name="ab_license_text">DAK — свободное приложение на лицензии GPL-3.0. Основано на NekoBox for Android (MatsuriDayo) и ядре sing-box; для VLESS Reality используется Xray-core, для AmneziaWG — amneziawg-go. Шрифт Onest — SIL OFL 1.1.</string>
     <string name="ab_license_btn">Текст лицензии</string>
     <string name="ab_source_btn">Исходники ядра</string>
     <string name="ab_plugin">Плагин %s</string>
@@ -784,10 +784,10 @@
     <string name="ab_not_bundled">не встроен</string>
     <string name="ks_watchdog">Сторож связи</string>
     <string name="ks_watchdog_sum">Каждые 30 секунд проверяет, что интернет через VPN работает, и сам переподключается, если связь «зависла»</string>
-    <string name="kh_kbWatchdog">Пока VPN включён, Kombain раз в 30 секунд делает проверочный запрос через сервер. Если три проверки подряд не прошли, а обычный интернет у телефона есть, он сбрасывает соединения и переподключается — как если бы вы выключили и включили VPN сами. Если «Автовыбор сервера» включён, вместо этого переходит на живой сервер из той же группы. Без интернета у телефона (метро, лифт) сторож ничего не делает.</string>
+    <string name="kh_kbWatchdog">Пока VPN включён, DAK раз в 30 секунд делает проверочный запрос через сервер. Если три проверки подряд не прошли, а обычный интернет у телефона есть, он сбрасывает соединения и переподключается — как если бы вы выключили и включили VPN сами. Если «Автовыбор сервера» включён, вместо этого переходит на живой сервер из той же группы. Без интернета у телефона (метро, лифт) сторож ничего не делает.</string>
     <string name="ks_auto">Автовыбор сервера</string>
     <string name="ks_auto_sum">При подключении выбирать самый быстрый живой сервер группы, а при падении — переходить на другой</string>
-    <string name="kh_kbAutoServer">При нажатии кнопки подключения Kombain проверяет все серверы текущей группы и подключается к самому быстрому из работающих. Если выбранный сервер работает и не сильно медленнее лучшего, остаётся на нём. Вместе со сторожем связи: когда сервер перестаёт отвечать, VPN переходит на другой сервер группы. Удобно, когда в группе несколько ваших нод или подписка.</string>
+    <string name="kh_kbAutoServer">При нажатии кнопки подключения DAK проверяет все серверы текущей группы и подключается к самому быстрому из работающих. Если выбранный сервер работает и не сильно медленнее лучшего, остаётся на нём. Вместе со сторожем связи: когда сервер перестаёт отвечать, VPN переходит на другой сервер группы. Удобно, когда в группе несколько ваших нод или подписка.</string>
     <string name="kb_wd_reconnect">Связь через «%s» зависла — переподключаю</string>
     <string name="kb_wd_switch">«%1$s» не отвечает — переключаюсь на «%2$s»</string>
     <string name="kb_wd_none">Ни один сервер группы не отвечает — переподключаю</string>
@@ -826,7 +826,7 @@
     <string name="srv_share_all">Отправить все ссылки</string>
     <string name="srv_copy_all">Копировать все ссылки</string>
     <string name="srv_qr_for">«%1$s» · %2$s</string>
-    <string name="srv_qr_hint">Отсканируйте в Kombain, Happ, v2rayNG или Hiddify</string>
+    <string name="srv_qr_hint">Отсканируйте в DAK, Happ, v2rayNG или Hiddify</string>
     <string name="srv_copied">Ссылки скопированы</string>
     <string name="ks_bank">Российские приложения мимо VPN</string>
     <string name="ks_bank_sum">Банки, Госуслуги, маркетплейсы и операторы работают напрямую. Найдено на телефоне: %d</string>
@@ -834,10 +834,10 @@
     <string name="ks_cat_upkeep">Обслуживание</string>
     <string name="ks_autosubs">Обновлять подписки</string>
     <string name="ks_autosubs_sum">Раз в сутки в фоне скачивать свежие серверы из всех подписок</string>
-    <string name="kh_kbAutoSubs">Kombain раз в сутки обновляет все подписки, даже если приложение закрыто. Серверы в подписках часто меняются — так у вас всегда актуальный список.</string>
+    <string name="kh_kbAutoSubs">DAK раз в сутки обновляет все подписки, даже если приложение закрыто. Серверы в подписках часто меняются — так у вас всегда актуальный список.</string>
     <string name="ks_autogeo">Обновлять базы сайтов</string>
     <string name="ks_autogeo_sum">Раз в неделю скачивать свежие списки российских сайтов и рекламы (geosite / geoip)</string>
-    <string name="kh_kbAutoGeo">Правила «Российские сайты напрямую» и «Без рекламы» работают по базам geosite и geoip. Kombain раз в неделю проверяет, вышла ли новая версия, и скачивает её. Новые базы применяются при следующем подключении.</string>
+    <string name="kh_kbAutoGeo">Правила «Российские сайты напрямую» и «Без рекламы» работают по базам geosite и geoip. DAK раз в неделю проверяет, вышла ли новая версия, и скачивает её. Новые базы применяются при следующем подключении.</string>
     <string name="ks_geo_now">Обновить базы сейчас</string>
     <string name="ks_geo_never">Ещё не обновлялись</string>
     <string name="ks_geo_last">Обновлены: %s</string>
@@ -846,7 +846,7 @@
     <string name="ks_geo_same">У вас уже последние базы</string>
     <string name="ks_watchsrv">Следить за моими серверами</string>
     <string name="ks_watchsrv_sum">Раз в 6 часов проверять свои серверы и присылать уведомление, если что-то упало</string>
-    <string name="kh_kbWatchServers">Для серверов из «Мои серверы» Kombain раз в 6 часов заходит по SSH, проверяет службы, память и диск. Если служба остановилась или сервер не отвечает — придёт уведомление.</string>
+    <string name="kh_kbWatchServers">Для серверов из «Мои серверы» DAK раз в 6 часов заходит по SSH, проверяет службы, память и диск. Если служба остановилась или сервер не отвечает — придёт уведомление.</string>
     <string name="kb_widget_desc">Включить или выключить VPN одним касанием</string>
     <string name="srv_just_now">только что</string>
     <string name="ks_route_mode">Что пускать через VPN</string>
@@ -861,7 +861,7 @@
         <item>Раз в неделю</item>
     </string-array>
     <string name="srv_sni_pick">Подобрать сайт рядом с сервером</string>
-    <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — Kombain зайдёт на него и проверит соседей</string>
+    <string name="srv_sni_need">Сначала укажите адрес сервера и пароль (или ключ) — DAK зайдёт на него и проверит соседей</string>
     <string name="srv_sni_searching">Проверяю сайты рядом с сервером…\nЭто до минуты, на сервере ничего не меняется.</string>
     <string name="srv_sp_hint">Выбранный сайт применится вместе с остальными настройками защиты по кнопке «Применить».</string>
     <string name="kb_wd_hop">Hysteria2: в этой сети открыто %1$d из %2$d портов прыжков — прыгаю только по ним</string>
@@ -897,12 +897,12 @@
     <string name="srv_sni_apply_msg">Маскировка сменится на %s. Ключи останутся прежними, но ссылки изменятся: этот телефон и устройства с подпиской обновятся сами, остальным нужно отправить новые QR-коды.</string>
     <string name="srv_sni_apply">Сменить</string>
     <string name="srv_sub_title">Ссылка-подписка</string>
-    <string name="srv_sub_sub">Для Kombain на другом телефоне — ключи будут обновляться сами</string>
+    <string name="srv_sub_sub">Для DAK на другом телефоне — ключи будут обновляться сами</string>
     <string name="srv_sub_qr">QR-код подписки</string>
-    <string name="srv_sub_qr_hint">Отсканируйте в Kombain: «+» → «Сканировать QR-код»</string>
+    <string name="srv_sub_qr_hint">Отсканируйте в DAK: «+» → «Сканировать QR-код»</string>
     <string name="srv_sub_copy">Скопировать ссылку-подписку</string>
     <string name="srv_sub_send">Отправить ссылку-подписку</string>
-    <string name="srv_sub_copied">Ссылка-подписка скопирована — вставьте её в Kombain через «+» → «Из буфера обмена»</string>
+    <string name="srv_sub_copied">Ссылка-подписка скопирована — вставьте её в DAK через «+» → «Из буфера обмена»</string>
     <string-array name="ks_route_mode_names">
         <item>Весь трафик</item>
         <item>Только заблокированное в РФ</item>
@@ -911,7 +911,7 @@
         <item>all</item>
         <item>blocked</item>
     </string-array>
-    <string name="kh_kbRouteMode">«Весь трафик» — всё идёт через сервер. «Только заблокированное в РФ» — через VPN идут только заблокированные в России сайты и сервисы (YouTube, Instagram, Discord, ChatGPT, Telegram и тысячи других), всё остальное — напрямую: банки и Госуслуги видят российский IP, скорость выше, трафика на сервере уходит меньше. Список (около 75 тысяч доменов и адреса заблокированных сетей) от проекта runetfreedom, Kombain обновляет его раз в день.</string>
+    <string name="kh_kbRouteMode">«Весь трафик» — всё идёт через сервер. «Только заблокированное в РФ» — через VPN идут только заблокированные в России сайты и сервисы (YouTube, Instagram, Discord, ChatGPT, Telegram и тысячи других), всё остальное — напрямую: банки и Госуслуги видят российский IP, скорость выше, трафика на сервере уходит меньше. Список (около 75 тысяч доменов и адреса заблокированных сетей) от проекта runetfreedom, DAK обновляет его раз в день.</string>
     <string name="srv_p_tg">Прокси для Telegram — Telegram работает и без VPN (MTProto, маскировка под сайт)</string>
     <string name="srv_tg_port">Порт Telegram (TCP)</string>
     <string name="srv_err_vpn_proto">Выберите хотя бы один VPN-протокол</string>
@@ -933,7 +933,7 @@
     <string name="srv_tg_off_yes">Выключить</string>
     <string name="srv_connect">Подключить существующий</string>
     <string name="srv_connect_title">Существующий сервер</string>
-    <string name="srv_connect_hint">Сервер, где Kombain уже стоит (например, поднятый с другого устройства). Ничего не переустанавливается: Kombain только заберёт ссылки и добавит сервер в список.</string>
+    <string name="srv_connect_hint">Сервер, где DAK уже стоит (например, поднятый с другого устройства). Ничего не переустанавливается: DAK только заберёт ссылки и добавит сервер в список.</string>
     <string name="srv_connect_go">Подключить</string>
     <string name="srv_connect_note">Нужны те же IP, логин и пароль SSH, что при установке. Ключи на сервере не меняются, телефон и другие устройства продолжат работать.</string>
     <string name="srv_default_existing">Сервер</string>
@@ -953,10 +953,10 @@
         <item>Safari</item>
     </string-array>
     <string name="srv_rot_title">Чередовать имена сайта маскировки</string>
-    <string name="srv_rot_hint">Сервер принимает 2–3 имени одного сайта (например, site.com и www.site.com), а Kombain распределяет соединения между ними — нет «залпа» рукопожатий к одному имени.</string>
+    <string name="srv_rot_hint">Сервер принимает 2–3 имени одного сайта (например, site.com и www.site.com), а DAK распределяет соединения между ними — нет «залпа» рукопожатий к одному имени.</string>
     <string name="srv_rot_now">Сейчас: %s</string>
     <string name="srv_hop_title">Прыжки портов Hysteria2</string>
-    <string name="srv_hop_hint">Hysteria2 слушает сразу 1000 UDP-портов, а приложение меняет порт каждые 10 секунд — помогает, когда сеть режет конкретный порт. В каждой сети Kombain сам проверяет, какие порты открыты, и прыгает только по ним.</string>
+    <string name="srv_hop_hint">Hysteria2 слушает сразу 1000 UDP-портов, а приложение меняет порт каждые 10 секунд — помогает, когда сеть режет конкретный порт. В каждой сети DAK сам проверяет, какие порты открыты, и прыгает только по ним.</string>
     <string name="srv_hop_now">Сейчас: порты %s</string>
     <string name="srv_wl_checking">Проверяю белые списки мобильного интернета…</string>
     <string name="srv_wl_failed">Не удалось проверить белые списки.</string>
@@ -986,7 +986,7 @@
     <string name="ks_reserve">Резервный адрес подписки</string>
     <string name="ks_reserve_off">Выключен — если IP сервера заблокируют, устройства не узнают, куда он переехал</string>
     <string name="ks_reserve_on">Включён (GitHub: %s)</string>
-    <string name="ks_reserve_msg">Подписка живёт на самом сервере. Если его IP заблокируют и вы переедете на новый VPS, другие устройства не узнают новый адрес.\n\nKombain может хранить зашифрованную копию подписок в вашем GitHub (секретный gist). Подписки получат запасной адрес, и при переезде все устройства найдут новый сервер сами. Ключ шифрования есть только в ссылках подписок — GitHub содержимое прочитать не может.\n\nНужен токен: github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token, отметьте только «gist», срок — без ограничения.</string>
+    <string name="ks_reserve_msg">Подписка живёт на самом сервере. Если его IP заблокируют и вы переедете на новый VPS, другие устройства не узнают новый адрес.\n\nDAK может хранить зашифрованную копию подписок в вашем GitHub (секретный gist). Подписки получат запасной адрес, и при переезде все устройства найдут новый сервер сами. Ключ шифрования есть только в ссылках подписок — GitHub содержимое прочитать не может.\n\nНужен токен: github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token, отметьте только «gist», срок — без ограничения.</string>
     <string name="ks_reserve_hint">Токен GitHub (ghp_…)</string>
     <string name="ks_reserve_check">Проверяю токен…</string>
     <string name="ks_reserve_done">Готово: резервный адрес включён. Чтобы он появился у других устройств, откройте у сервера «Пользователи» → «Подписка» и отправьте ссылку заново (один раз).</string>
@@ -994,8 +994,8 @@
     <string name="srv_move">Переезд на новый сервер</string>
     <string name="srv_m_move">Переехать на новый сервер…</string>
     <string name="srv_move_title">Новый VPS для «%s»</string>
-    <string name="srv_move_hint">Если IP старого сервера (%s) заблокировали — купите новый VPS и введите доступ к нему. Kombain перенесёт ключи, пользователей и настройки из резервной копии, которая хранится в приложении: старый сервер для этого не нужен. Сменится только адрес.</string>
-    <string name="srv_move_hint_nobackup">Резервной копии этого сервера в приложении пока нет (она появится после любого действия с сервером). Kombain попробует забрать настройки со старого сервера (%s) — для этого он должен быть доступен.</string>
+    <string name="srv_move_hint">Если IP старого сервера (%s) заблокировали — купите новый VPS и введите доступ к нему. DAK перенесёт ключи, пользователей и настройки из резервной копии, которая хранится в приложении: старый сервер для этого не нужен. Сменится только адрес.</string>
+    <string name="srv_move_hint_nobackup">Резервной копии этого сервера в приложении пока нет (она появится после любого действия с сервером). DAK попробует забрать настройки со старого сервера (%s) — для этого он должен быть доступен.</string>
     <string name="srv_move_go">Переехать</string>
     <string name="srv_move_same">Это адрес старого сервера</string>
     <string name="kb_wd_net">Сеть сменилась на «%s» — беру протокол, который здесь работал</string>
@@ -1003,7 +1003,7 @@
     <string name="more_diag">Диагностика</string>
     <string name="more_diag_sub">Что работает в этой сети</string>
     <string name="diag_title">Диагностика сети</string>
-    <string name="diag_intro">За полминуты Kombain проверит, что сейчас режет ваша сеть: обычный интернет, зарубежные сайты, доступен ли ваш сервер и какие его протоколы проходят. VPN на время проверки выключится.</string>
+    <string name="diag_intro">За полминуты DAK проверит, что сейчас режет ваша сеть: обычный интернет, зарубежные сайты, доступен ли ваш сервер и какие его протоколы проходят. VPN на время проверки выключится.</string>
     <string name="diag_go">Проверить</string>
     <string name="diag_again">Проверить ещё раз</string>
     <string name="srv_tg_card">✈  Прокси для Telegram — отправить ссылку</string>

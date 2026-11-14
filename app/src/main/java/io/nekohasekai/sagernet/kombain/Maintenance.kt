@@ -131,7 +131,7 @@ object Maintenance {
                 tmp.renameTo(target)
                 versionFile.writeText(tag)
                 changed = true
-                Logs.i("[Kombain] база $file обновлена до $tag")
+                Logs.i("[DAK] база $file обновлена до $tag")
             } catch (e: Exception) {
                 Logs.w(e)
             } finally {

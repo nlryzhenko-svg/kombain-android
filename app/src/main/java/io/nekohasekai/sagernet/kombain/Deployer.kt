@@ -295,7 +295,7 @@ object Deployer {
             val r = ssh(node).run(listOf("ensure-sub"))
             val json = r.json
             if (!r.ok || json == null) {
-                return@runOnDefaultDispatcher finish(false, r.error ?: "на сервере не найден Kombain")
+                return@runOnDefaultDispatcher finish(false, r.error ?: "на сервере не найден DAK")
             }
             // the same server added twice: update the existing card
             ServerStore.all().firstOrNull { it.host.trim() == node.host.trim() && it.id != node.id }?.let { old ->
@@ -493,7 +493,7 @@ object Deployer {
     }
 
     fun uninstall(node: ServerNode) {
-        if (!start("Удаляю Kombain с ${node.name}")) return
+        if (!start("Удаляю DAK с ${node.name}")) return
         runOnDefaultDispatcher {
             val r = ssh(node).run(listOf("uninstall"))
             if (r.error != null) return@runOnDefaultDispatcher finish(false, r.error)

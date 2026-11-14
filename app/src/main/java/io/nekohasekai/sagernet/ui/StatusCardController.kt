@@ -91,7 +91,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         )
         dot.backgroundTintList = ColorStateList.valueOf(
             when {
-                connected -> 0xFFFFFFFF.toInt()
+                connected -> 0xFF2FE3A6.toInt()
                 busy -> 0xFFFFD166.toInt()
                 else -> 0xFF9AA9AC.toInt()
             }
@@ -113,9 +113,9 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         progress.isVisible = busy || testing || searching
         knob.alpha = if (busy) 0.7f else 1f
         (knobIcon.background.mutate() as? android.graphics.drawable.GradientDrawable)?.setColor(
-            if (connected) 0xFFFFFFFF.toInt() else 0x33FFFFFF
+            if (connected) 0xFF2FE3A6.toInt() else 0x33FFFFFF
         )
-        knobIcon.setColorFilter(if (connected) 0xFFC21F27.toInt() else 0xFFFFFFFF.toInt())
+        knobIcon.setColorFilter(if (connected) 0xFF06372A.toInt() else 0xFFFFFFFF.toInt())
         if (!connected) {
             detail.typeface = android.graphics.Typeface.DEFAULT
             detail.text = ctx.getString(

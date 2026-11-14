@@ -80,7 +80,7 @@ object Whitelist {
                 if (tmp.length() > 1000) tmp.renameTo(local) else tmp.delete()
             }
             nets = null; names = null
-            Logs.i("[Kombain] белые списки обновлены")
+            Logs.i("[DAK] белые списки обновлены")
         } finally {
             client.close()
         }

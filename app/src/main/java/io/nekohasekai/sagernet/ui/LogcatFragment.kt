@@ -48,7 +48,7 @@ class LogcatFragment : ToolbarFragment(R.layout.layout_logcat),
         var color = ForegroundColorSpan(0xFF8FA5A2.toInt())
         when {
             line.contains("INFO[") || line.contains(" [Info]") -> {
-                color = ForegroundColorSpan(0xFFFF4A52.toInt())
+                color = ForegroundColorSpan(0xFF2FE3A6.toInt())
             }
 
             line.contains("ERROR[") || line.contains(" [Error]") -> {

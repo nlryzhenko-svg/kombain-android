@@ -181,7 +181,19 @@ object ProfileManager {
         }
     }
 
+    /** The app was called Kombain: its preset rules carry the old name. */
+    suspend fun renameLegacyRules() {
+        val legacy = mapOf(
+            "Kombain · РФ напрямую" to io.nekohasekai.sagernet.ui.KombainPreferenceFragment.RULE_RU,
+            "Kombain · Без рекламы" to io.nekohasekai.sagernet.ui.KombainPreferenceFragment.RULE_ADS,
+        )
+        SagerDatabase.rulesDao.allRules().forEach { r ->
+            legacy[r.name]?.let { updateRule(r.apply { name = it }) }
+        }
+    }
+
     suspend fun getRules(): List<RuleEntity> {
+        renameLegacyRules()
         var rules = SagerDatabase.rulesDao.allRules()
         if (rules.isEmpty() && !DataStore.rulesFirstCreate) {
             DataStore.rulesFirstCreate = true

@@ -71,7 +71,7 @@ object BlockedLists {
             if (srs.length() > 1024 && srs.inputStream().use { s -> ByteArray(3).also { s.read(it) } }.contentEquals("SRS".toByteArray())) srs.renameTo(ipsFile())
             else srs.delete()
             DataStore.kbListsUpdated = System.currentTimeMillis()
-            Logs.i("[Kombain] списки блокировок обновлены: $count доменов")
+            Logs.i("[DAK] списки блокировок обновлены: $count доменов")
             return count
         } finally {
             client.close()

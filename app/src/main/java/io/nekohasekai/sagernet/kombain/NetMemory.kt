@@ -94,7 +94,7 @@ object NetMemory {
         val old = m.optJSONObject(net.key)?.optLong("id")
         m.put(net.key, JSONObject().put("id", profileId).put("at", System.currentTimeMillis()).put("label", net.label))
         DataStore.kbNetMemory = m.toString()
-        if (old != profileId) Logs.i("[Kombain] ${net.label}: запомнил профиль #$profileId")
+        if (old != profileId) Logs.i("[DAK] ${net.label}: запомнил профиль #$profileId")
     }
 
     /** The profile that worked here last time — only one from the same group as [sameGroupAs]. */

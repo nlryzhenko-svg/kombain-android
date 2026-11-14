@@ -63,8 +63,8 @@ class KombainSettingsFragment : ToolbarFragment(R.layout.layout_config_settings)
 class KombainPreferenceFragment : PreferenceFragmentCompat() {
 
     companion object {
-        const val RULE_RU = "Kombain · РФ напрямую"
-        const val RULE_ADS = "Kombain · Без рекламы"
+        const val RULE_RU = "DAK · РФ напрямую"
+        const val RULE_ADS = "DAK · Без рекламы"
     }
 
     private lateinit var apps: Preference
@@ -275,6 +275,7 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
     private fun ruleSwitch(key: String, ruleName: String, make: () -> RuleEntity) {
         val sw = findPreference<SwitchPreference>(key)!!
         runOnDefaultDispatcher {
+            ProfileManager.renameLegacyRules()
             val on = SagerDatabase.rulesDao.allRules().any { it.name == ruleName && it.enabled }
             onMainDispatcher { sw.isChecked = on }
         }

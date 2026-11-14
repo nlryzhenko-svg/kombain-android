@@ -639,7 +639,7 @@ fun buildConfig(
         val kbBlockedOnly = !forTest && io.nekohasekai.sagernet.kombain.BlockedLists.enabled &&
                 io.nekohasekai.sagernet.kombain.BlockedLists.ready().also { ok ->
                     if (!ok) {
-                        Logs.w("[Kombain] списки блокировок ещё не готовы — пока весь трафик через VPN")
+                        Logs.w("[DAK] списки блокировок ещё не готовы — пока весь трафик через VPN")
                         io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher {
                             runCatching { io.nekohasekai.sagernet.kombain.BlockedLists.ensure() }.onFailure { Logs.w(it) }
                         }

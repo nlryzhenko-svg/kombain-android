@@ -84,7 +84,7 @@ object RawUpdater : GroupUpdater() {
             } catch (e: Exception) {
                 if (kbAlt.isNullOrBlank() || kbKey.isNullOrBlank()) throw e
                 // the server is unreachable — maybe it moved: read the encrypted reserve copy
-                Logs.w("[Kombain] подписка недоступна (${e.message}) — читаю резервный адрес")
+                Logs.w("[DAK] подписка недоступна (${e.message}) — читаю резервный адрес")
                 val alt = Libcore.newHttpClient().apply {
                     trySocks5(DataStore.mixedPort)
                     modernTLS()
@@ -95,7 +95,7 @@ object RawUpdater : GroupUpdater() {
                 val data = io.nekohasekai.sagernet.kombain.AltSub.decrypt(kbKey, Util.getStringBox(alt.contentString))
                 val newSub = data.optString("sub")
                 if (newSub.isNotBlank() && newSub != link) {
-                    Logs.w("[Kombain] сервер переехал — новая подписка ${newSub.substringBefore('#')}")
+                    Logs.w("[DAK] сервер переехал — новая подписка ${newSub.substringBefore('#')}")
                     subscription.link = newSub
                 }
                 content = data.optString("links")

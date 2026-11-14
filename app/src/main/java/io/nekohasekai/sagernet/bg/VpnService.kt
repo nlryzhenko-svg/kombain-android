@@ -139,7 +139,7 @@ class VpnService : BaseVpnService(),
         val ruApps = if (DataStore.kbBankDirect) io.nekohasekai.sagernet.kombain.RuApps.installed(packageManager) else emptyList()
         if (!proxyApps && !needBypassRootUid && ruApps.isNotEmpty()) {
             ruApps.forEach { runCatching { builder.addDisallowedApplication(it) } }
-            Logs.d("Kombain: RU apps bypass ${ruApps.joinToString(", ")}")
+            Logs.d("DAK: RU apps bypass ${ruApps.joinToString(", ")}")
         }
 
         if (proxyApps || needBypassRootUid) {

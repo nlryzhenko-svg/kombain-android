@@ -87,7 +87,7 @@ object AltSub {
         val req = okhttp3.Request.Builder().url(API + path)
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "Kombain")
+            .header("User-Agent", "DAK")
             .method(method, reqBody)
             .build()
         http.newCall(req).execute().use { resp ->
@@ -112,9 +112,9 @@ object AltSub {
         val exists = id.isNotBlank() && runCatching { api("GET", "/gists/$id") }.isSuccess
         if (!exists) {
             val g = api("POST", "/gists", JSONObject()
-                .put("description", "Kombain: резервные адреса подписок (зашифровано)")
+                .put("description", "DAK: резервные адреса подписок (зашифровано)")
                 .put("public", false)
-                .put("files", JSONObject().put("kombain.txt", JSONObject().put("content", "Kombain reserve subscriptions. Encrypted."))))
+                .put("files", JSONObject().put("kombain.txt", JSONObject().put("content", "DAK reserve subscriptions. Encrypted."))))
             DataStore.kbGistId = g.getString("id")
         }
         return login
@@ -147,7 +147,7 @@ object AltSub {
         }
         if (files.length() == 0) return 0
         api("PATCH", "/gists/${DataStore.kbGistId}", JSONObject().put("files", files))
-        Logs.i("[Kombain] резервная подписка обновлена: ${files.length()}")
+        Logs.i("[DAK] резервная подписка обновлена: ${files.length()}")
         return files.length()
     }
 }
