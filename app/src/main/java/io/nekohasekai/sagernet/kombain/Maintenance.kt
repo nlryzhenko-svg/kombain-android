@@ -39,7 +39,7 @@ object Maintenance {
     fun schedule() {
         val wm = RemoteWorkManager.getInstance(app)
         val needed = (DataStore.kbWatchServers && ServerStore.all().isNotEmpty()) ||
-                DataStore.kbAutoSubs || DataStore.kbAutoGeo
+                DataStore.kbAutoSubs || DataStore.kbAutoGeo || DataStore.kbAutoUpdate
         if (!needed) {
             wm.cancelUniqueWork(WORK_NAME)
             return
@@ -81,6 +81,27 @@ object Maintenance {
             .setAutoCancel(true)
             .build()
         runCatching { NotificationManagerCompat.from(ctx).notify(node.id.hashCode(), n) }
+    }
+
+    // ------------------------------------------------------------------ updates of DAK
+
+    /** A new version is out: one notification per version; tapping it opens the update dialog. */
+    fun notifyUpdate(ctx: Context) {
+        val r = Updater.check() ?: return
+        if (DataStore.kbUpdateNotified == r.version) return
+        DataStore.kbUpdateNotified = r.version
+        val pi = PendingIntent.getActivity(
+            ctx, 1, Intent(ctx, MainActivity::class.java).putExtra("kombain_open", "update"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val n = NotificationCompat.Builder(ctx, CHANNEL)
+            .setSmallIcon(R.drawable.ic_service_active)
+            .setContentTitle("Доступна DAK ${r.version}")
+            .setContentText("Нажмите, чтобы обновить — серверы и настройки сохранятся")
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(ctx).notify("dak-update".hashCode(), n) }
     }
 
     // ------------------------------------------------------------------ subscriptions
@@ -147,6 +168,7 @@ object Maintenance {
             if (DataStore.kbWatchServers) runCatching { checkServers(applicationContext) }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoSubs) runCatching { updateSubscriptions() }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoGeo) runCatching { updateGeo() }.onFailure { Logs.w(it) }
+            if (Updater.due()) runCatching { notifyUpdate(applicationContext) }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoGeo && BlockedLists.enabled &&
                 System.currentTimeMillis() - DataStore.kbListsUpdated > 20 * 3600_000L
             ) runCatching { BlockedLists.update() }.onFailure { Logs.w(it) }

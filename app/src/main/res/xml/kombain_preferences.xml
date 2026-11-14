@@ -48,11 +48,10 @@
             app:persistent="false"
             app:summary="@string/ks_ads_sum"
             app:title="@string/ks_ads" />
-        <SwitchPreference
-            app:defaultValue="false"
+        <Preference
             app:icon="@drawable/ic_kombain_bank"
-            app:key="kbBankDirect"
-            app:title="@string/ks_bank" />
+            app:key="ks_direct_apps"
+            app:title="@string/da_title" />
         <moe.matsuri.nb4a.ui.SimpleMenuPreference
             app:entries="@array/ks_dns_names"
             app:entryValues="@array/ks_dns_values"
@@ -131,6 +130,16 @@
             app:icon="@drawable/ic_kombain_shield_check"
             app:key="ks_reserve"
             app:title="@string/ks_reserve" />
+        <SwitchPreference
+            app:defaultValue="true"
+            app:icon="@drawable/ic_kombain_download"
+            app:key="kbAutoUpdate"
+            app:summary="@string/ks_autoupdate_sum"
+            app:title="@string/ks_autoupdate" />
+        <Preference
+            app:icon="@drawable/ic_baseline_refresh_24"
+            app:key="ks_update_now"
+            app:title="@string/ks_update_now" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/ks_cat_look">

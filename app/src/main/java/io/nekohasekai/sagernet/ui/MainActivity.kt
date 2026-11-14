@@ -124,7 +124,10 @@ class MainActivity : ThemedActivity(),
 
         if (intent?.action == Intent.ACTION_VIEW || intent?.getStringExtra("kombain_open") != null) {
             onNewIntent(intent)
+        } else if (io.nekohasekai.sagernet.kombain.Updater.due()) {
+            UpdateDialog.check(this, manual = false)
         }
+        if (savedInstanceState == null) runOnDefaultDispatcher { io.nekohasekai.sagernet.kombain.Updater.cleanup() }
 
         refreshNavMenu(DataStore.enableClashAPI)
 
@@ -157,6 +160,11 @@ class MainActivity : ThemedActivity(),
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getStringExtra("kombain_open") == "update") {
+            intent.removeExtra("kombain_open")
+            UpdateDialog.check(this, manual = true)
+            return
+        }
         if (intent.getStringExtra("kombain_open") == "servers") {
             intent.removeExtra("kombain_open")
             displayFragment(MyServersFragment())

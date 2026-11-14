@@ -144,12 +144,20 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
             true
         }
 
-        bank = findPreference("kbBankDirect")!!
-        bank.onPreferenceChangeListener = reload
+        bank = findPreference("ks_direct_apps")!!
+        bank.setOnPreferenceClickListener {
+            (activity as? MainActivity)?.displayFragment(DirectAppsFragment()); true
+        }
         val upkeep = Preference.OnPreferenceChangeListener { _, _ ->
             runOnDefaultDispatcher { io.nekohasekai.sagernet.kombain.Maintenance.schedule() }; true
         }
-        listOf("kbAutoSubs", "kbAutoGeo", "kbWatchServers").forEach { findPreference<Preference>(it)!!.onPreferenceChangeListener = upkeep }
+        findPreference<Preference>("ks_update_now")!!.apply {
+            summary = getString(R.string.ab_version_now, io.nekohasekai.sagernet.kombain.Updater.current)
+            setOnPreferenceClickListener {
+                (activity as? MainActivity)?.let { UpdateDialog.check(it, manual = true) }; true
+            }
+        }
+        listOf("kbAutoSubs", "kbAutoGeo", "kbWatchServers", "kbAutoUpdate").forEach { findPreference<Preference>(it)!!.onPreferenceChangeListener = upkeep }
         geoNow = findPreference("ks_geo_now")!!
         geoNow.setOnPreferenceClickListener {
             geoNow.setSummary(R.string.ks_geo_running)
@@ -266,8 +274,10 @@ class KombainPreferenceFragment : PreferenceFragmentCompat() {
         battery.summary = getString(if (ignoring) R.string.ks_battery_on else R.string.ks_battery_off)
         updateGeoSummary()
         runOnDefaultDispatcher {
-            val n = io.nekohasekai.sagernet.kombain.RuApps.installed(requireContext().packageManager).size
-            onMainDispatcher { if (isAdded) bank.summary = getString(R.string.ks_bank_sum, n) }
+            val n = io.nekohasekai.sagernet.kombain.RuApps.effective(requireContext().packageManager).size
+            onMainDispatcher {
+                if (isAdded) bank.summary = if (DataStore.kbBankDirect) getString(R.string.ks_bank_on, n) else getString(R.string.ks_bank_off)
+            }
         }
     }
 

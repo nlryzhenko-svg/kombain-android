@@ -180,6 +180,13 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var kbSmartHop by configurationStore.boolean("kbSmartHop") { true }
     /** {"<network>|<server>|<range>": {"ports": [...], "tested": n, "at": ms}} */
     var kbHopPorts by configurationStore.string("kbHopPorts")
+    // updates of DAK itself (GitHub releases)
+    var kbAutoUpdate by configurationStore.boolean("kbAutoUpdate") { true }
+    var kbUpdateChecked by configurationStore.long("kbUpdateChecked") { 0L }
+    var kbUpdateNotified by configurationStore.string("kbUpdateNotified")
+    /** «Приложения мимо VPN»: built-in apps the user unticked, apps the user added (package names, one per line) */
+    var kbDirectOff by configurationStore.string("kbDirectOff")
+    var kbDirectExtra by configurationStore.string("kbDirectExtra")
     var kbBankDirect by configurationStore.boolean("kbBankDirect") { false }
     var alwaysShowAddress by configurationStore.boolean(Key.ALWAYS_SHOW_ADDRESS)
 

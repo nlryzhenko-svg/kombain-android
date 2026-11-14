@@ -38,8 +38,9 @@ class AboutFragment : ToolbarFragment(R.layout.layout_about) {
 
         binding.aboutVersion.text = SagerNet.appVersionNameForDisplay
         binding.aboutLicenseBtn.setOnClickListener { showLicense() }
+        binding.aboutUpdate.setOnClickListener { (activity as? MainActivity)?.let { UpdateDialog.check(it, manual = true) } }
         binding.aboutSourceBtn.setOnClickListener {
-            requireContext().launchCustomTab("https://github.com/MatsuriDayo/NekoBoxForAndroid")
+            requireContext().launchCustomTab("https://github.com/nlryzhenko-svg/kombain-android")
         }
         binding.aboutBattery.setOnClickListener {
             runCatching {
