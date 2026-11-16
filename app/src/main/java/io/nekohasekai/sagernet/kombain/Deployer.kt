@@ -98,6 +98,10 @@ object Deployer {
         node.sdPort = i.optInt("sdPort", node.sdPort)
         if (json.has("telegram")) node.tgLink = json.optString("telegram")
         node.autoPorts = i.optInt("autoPorts", node.autoPorts)
+        if (i.has("domain")) {
+            node.domain = i.optString("domain"); node.nvPort = i.optInt("nvPort"); node.atPort = i.optInt("atPort")
+            node.cdnHost = i.optString("cdnHost"); node.cdnPort = i.optInt("cdnPort")
+        }
         if (i.has("fp")) {
             node.fp = i.optString("fp", node.fp)
             node.antifreeze = i.optInt("antifreeze") == 1
@@ -449,6 +453,58 @@ object Deployer {
             val n = importLinks(node, groupName(node), r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Sudoku работает, профили обновлены ($n). Устройства с подпиской получат его сами.")
+        }
+    }
+
+    /** Own domain: Let's Encrypt certificate + NaiveProxy and AnyTLS. */
+    fun setDomain(node: ServerNode, domain: String) {
+        if (!start("Домен $domain для ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = ssh(node).run(listOf("set-domain", "--domain", domain))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось подключить домен")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "NaiveProxy (порт ${node.nvPort}) и AnyTLS (порт ${node.atPort}) работают на $domain, профили обновлены ($n). " +
+                "Сертификат Let's Encrypt продлевается сам.")
+        }
+    }
+
+    fun disableDomain(node: ServerNode) {
+        if (!start("Выключаю NaiveProxy и AnyTLS на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = ssh(node).run(listOf("disable-domain"))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "NaiveProxy и AnyTLS выключены, профили обновлены ($n).")
+        }
+    }
+
+    /** XHTTP for a CDN; the message tells what to enter as the CDN's origin. */
+    fun enableCdn(node: ServerNode, host: String) {
+        if (!start("CDN $host для ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = ssh(node).run(listOf("enable-cdn", "--cdn-host", host))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось включить CDN")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Готово, профили обновлены ($n). В настройках CDN укажите источник: http://${node.host}:${node.cdnPort} " +
+                "(протокол HTTP, кэширование выключено). Профиль «CDN» заработает, как только CDN начнёт отдавать $host.")
+        }
+    }
+
+    fun disableCdn(node: ServerNode) {
+        if (!start("Выключаю CDN на ${node.name}")) return
+        runOnDefaultDispatcher {
+            val r = ssh(node).run(listOf("disable-cdn"))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не удалось выключить")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, "Подключение через CDN выключено, профили обновлены ($n).")
         }
     }
 

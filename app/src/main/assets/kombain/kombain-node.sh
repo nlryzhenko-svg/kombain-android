@@ -34,6 +34,15 @@
 #   kombain-node.sh import --host IP --data BASE64 [--force]
 #                                             move a server here from such a backup: same keys, users and links
 #                                             (only the address changes)
+#   kombain-node.sh set-domain --domain NAME [--nv-port N] [--at-port N] [--protocols naive,anytls]
+#                             the server's own domain (its A record points here): a Let's Encrypt certificate
+#                             and NaiveProxy + AnyTLS on it (sing-box). Links: naive+https://, anytls://
+#   kombain-node.sh disable-domain
+#   kombain-node.sh enable-cdn --cdn-host NAME [--cdn-port N]
+#                             VLESS+XHTTP for a CDN: the CDN fetches from http://IP:CDN_PORT (its «origin»),
+#                             clients connect to NAME through the CDN — blocking the server's IP doesn't matter.
+#                             VLESS Encryption keeps the CDN from reading the traffic.
+#   kombain-node.sh disable-cdn
 #   kombain-node.sh uninstall
 #
 # With KB_WITH_EXPORT=1 every command that prints KB_RESULT also prints KB_EXPORT.
@@ -71,6 +80,8 @@ HY_URL_BASE=${HY_URL_BASE:-https://github.com/apernet/hysteria/releases/latest/d
 SB_REPO=${SB_REPO:-https://github.com/SagerNet/sing-box}
 MTG_REPO=${MTG_REPO:-https://github.com/9seconds/mtg}
 SD_URL_BASE=${SD_URL_BASE:-https://github.com/SUDOKU-ASCII/sudoku/releases/latest/download}
+LEGO_REPO=${LEGO_REPO:-https://github.com/go-acme/lego}
+KB_ACME=${KB_ACME:-1}                # 0 = self-signed certificate for the domain (testing)
 
 step() { echo "KB_STEP $*"; }
 die() { echo "KB_ERROR $*"; exit 1; }
@@ -92,12 +103,14 @@ load_state() {
   FP=$(fp_fix "${FP:-firefox}"); ANTIFREEZE=${ANTIFREEZE:-0}; XH_DEC=${XH_DEC:-}; XH_ENC=${XH_ENC:-}
   SNI_ROT=${SNI_ROT:-0}; SNI_ALTS=${SNI_ALTS:-}; HY_HOP=${HY_HOP:-}
   SD_PORT=${SD_PORT:-8880}; SD_PUB=${SD_PUB:-}; SD_MPRIV=${SD_MPRIV:-}
+  DOMAIN=${DOMAIN:-}; NV_PORT=${NV_PORT:-0}; AT_PORT=${AT_PORT:-0}
+  CDN_HOST=${CDN_HOST:-}; CDN_PORT=${CDN_PORT:-0}; CDN_PATH=${CDN_PATH:-}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV DOMAIN NV_PORT AT_PORT CDN_HOST CDN_PORT CDN_PATH NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -153,22 +166,40 @@ download_binaries() {
     curl -fsSL --retry 3 -o "$tmp/hysteria" "$HY_URL_BASE/hysteria-linux-$HY_ARCH" || die "не удалось скачать Hysteria2"
     install -m 755 "$tmp/hysteria" "$KB_BIN/kombain-hysteria"
   fi
-  if has_proto tuic && [ ! -x "$KB_BIN/kombain-singbox" ]; then
-    step "Скачиваю sing-box (для TUIC)"
-    local tag ver
-    tag=$(curl -fsSI "$SB_REPO/releases/latest" 2>/dev/null | awk -F/ 'tolower($0) ~ /^location:/ {print $NF}' | tr -d '\r' || true)
-    [ -n "$tag" ] || tag=$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null \
-      | grep -o '"tag_name": *"[^"]*"' | head -1 | grep -o 'v[^"]*' || true)
-    ver=${tag#v}
-    [ -n "$ver" ] || die "не удалось узнать версию sing-box"
-    curl -fsSL --retry 3 -o "$tmp/sb.tgz" "$SB_REPO/releases/download/$tag/sing-box-$ver-linux-$SB_ARCH.tar.gz" || die "не удалось скачать sing-box"
-    tar -xzf "$tmp/sb.tgz" -C "$tmp"
-    install -m 755 "$tmp/sing-box-$ver-linux-$SB_ARCH/sing-box" "$KB_BIN/kombain-singbox"
-  fi
+  has_proto tuic && download_singbox
   rm -rf "$tmp"
   if has_proto tg; then download_mtg; fi
   if has_proto sudoku; then download_sudoku; fi
   return 0
+}
+
+download_singbox() { # TUIC, NaiveProxy and AnyTLS run on sing-box
+  [ "$KB_DOWNLOAD" = 1 ] || return 0
+  [ -x "$KB_BIN/kombain-singbox" ] && return 0
+  detect_arch
+  step "Скачиваю sing-box"
+  local tmp tag ver; tmp=$(mktemp -d)
+  tag=$(latest_tag "$SB_REPO"); ver=${tag#v}
+  [ -n "$ver" ] || die "не удалось узнать версию sing-box"
+  curl -fsSL --retry 3 -o "$tmp/sb.tgz" "$SB_REPO/releases/download/$tag/sing-box-$ver-linux-$SB_ARCH.tar.gz" || die "не удалось скачать sing-box"
+  tar -xzf "$tmp/sb.tgz" -C "$tmp"
+  install -m 755 "$tmp/sing-box-$ver-linux-$SB_ARCH/sing-box" "$KB_BIN/kombain-singbox"
+  rm -rf "$tmp"
+}
+
+download_lego() { # Let's Encrypt client (one static binary)
+  [ "$KB_DOWNLOAD" = 1 ] || return 0
+  [ -x "$KB_BIN/kombain-lego" ] && return 0
+  detect_arch
+  step "Скачиваю lego (сертификаты Let's Encrypt)"
+  local tmp tag arch; tmp=$(mktemp -d)
+  case $SB_ARCH in amd64) arch=amd64 ;; arm64) arch=arm64 ;; *) arch=armv7 ;; esac
+  tag=$(latest_tag "$LEGO_REPO")
+  [ -n "$tag" ] || die "не удалось узнать версию lego"
+  curl -fsSL --retry 3 -o "$tmp/lego.tgz" "$LEGO_REPO/releases/download/$tag/lego_${tag}_linux_$arch.tar.gz" || die "не удалось скачать lego"
+  tar -xzf "$tmp/lego.tgz" -C "$tmp"
+  install -m 755 "$tmp/lego" "$KB_BIN/kombain-lego"
+  rm -rf "$tmp"
 }
 
 download_sudoku() {
@@ -393,7 +424,13 @@ render_xray() {
     xh_in=$(printf ',{"tag":"xhttp-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
       "$XH_PORT" "$(json_clients "$xh_flow")" "$xh_dec" "$XH_PATH" "$reality" "$sniff")
   fi
-  if has_proto hy2 || has_proto tuic || has_proto tg; then
+  local cdn_in=""
+  if has_proto cdn && [ -n "$CDN_PATH" ]; then
+    # for a CDN: plain HTTP to the origin port, VLESS Encryption keeps the CDN from reading the traffic
+    cdn_in=$(printf ',{"tag":"cdn-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"packet-up"},"security":"none"},%s}' \
+      "$CDN_PORT" "$(json_clients "")" "${XH_DEC:-none}" "$CDN_PATH" "$sniff")
+  fi
+  if has_proto hy2 || has_proto tuic || has_proto tg || has_proto naive || has_proto anytls; then
     socks_in=',{"tag":"hy-in","listen":"127.0.0.1","port":'"$KB_SOCKS_PORT"',"protocol":"socks","settings":{"udp":true}}'
   fi
   if [ "$ROLE" = entry ]; then
@@ -415,7 +452,7 @@ render_xray() {
   "stats": {},
   "policy": {"levels": {"0": {"statsUserUplink": true, "statsUserDownlink": true}},
              "system": {"statsInboundUplink": true, "statsInboundDownlink": true}},
-  "inbounds": [$vless_in$xh_in$socks_in],
+  "inbounds": [$vless_in$xh_in$cdn_in$socks_in],
   "outbounds": [{"tag": "direct", "protocol": "freedom"$freedom_settings}, {"tag": "block", "protocol": "blackhole"}$extra_out],
   "routing": {"domainStrategy": "$strategy", "rules": [
     ${ru_rules}
@@ -437,6 +474,79 @@ ensure_cert() {
       -keyout "$KB_DIR/hy.key" -out "$KB_DIR/hy.crt" -subj "/CN=$SNI" >/dev/null 2>&1
     chmod 600 "$KB_DIR/hy.key"
   fi
+}
+
+# ---- own domain: Let's Encrypt certificate, NaiveProxy + AnyTLS (sing-box), renewed by a timer
+
+domain_cert() { echo "$KB_DIR/domain.crt"; }
+domain_key() { echo "$KB_DIR/domain.key"; }
+
+issue_cert() {
+  if [ "$KB_ACME" != 1 ]; then
+    [ -f "$(domain_cert)" ] && openssl x509 -in "$(domain_cert)" -noout -checkhost "$DOMAIN" 2>/dev/null | grep -q "does match" && return 0
+    openssl req -x509 -nodes -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 3650 \
+      -keyout "$(domain_key)" -out "$(domain_cert)" -subj "/CN=$DOMAIN" -addext "subjectAltName=DNS:$DOMAIN" >/dev/null 2>&1
+    chmod 600 "$(domain_key)"
+    return 0
+  fi
+  if [ -f "$KB_DIR/lego/certificates/$DOMAIN.crt" ] && \
+     openssl x509 -in "$KB_DIR/lego/certificates/$DOMAIN.crt" -noout -checkend 2592000 >/dev/null 2>&1; then
+    install_cert; cert_timer; return 0
+  fi
+  download_lego
+  step "Получаю сертификат Let's Encrypt для $DOMAIN"
+  open_port 80/tcp
+  if busy_ports | grep -qx 80; then
+    die "порт 80 занят другой программой — Let's Encrypt проверяет домен через него. Освободите порт 80 и повторите"
+  fi
+  local out
+  out=$("$KB_BIN/kombain-lego" --accept-tos --email "dak@$DOMAIN" --domains "$DOMAIN" --http --path "$KB_DIR/lego" run 2>&1) \
+    || die "Let's Encrypt не выдал сертификат: $(echo "$out" | grep -iE 'error|urn:' | tail -2 | tr '\n' ' ' | cut -c1-300)"
+  install_cert
+  cert_timer
+}
+
+install_cert() { # lego's files -> domain.crt / domain.key
+  local d="$KB_DIR/lego/certificates"
+  [ -f "$d/$DOMAIN.crt" ] || die "сертификат для $DOMAIN не найден"
+  install -m 600 "$d/$DOMAIN.crt" "$(domain_cert)"
+  install -m 600 "$d/$DOMAIN.key" "$(domain_key)"
+}
+
+cert_timer() { # checked twice a day; lego renews 30 days before expiry
+  [ "$KB_SYSTEMD" = 1 ] || return 0
+  local hook="install -m 600 $KB_DIR/lego/certificates/$DOMAIN.crt $KB_DIR/domain.crt && install -m 600 $KB_DIR/lego/certificates/$DOMAIN.key $KB_DIR/domain.key && systemctl restart kombain-tls"
+  printf '%s\n' "[Unit]" "Description=DAK: renew the Let's Encrypt certificate" "[Service]" "Type=oneshot" \
+    "ExecStart=$KB_BIN/kombain-lego --accept-tos --email dak@$DOMAIN --domains $DOMAIN --http --path $KB_DIR/lego renew --days 30 --renew-hook \"$hook\"" \
+    > /etc/systemd/system/kombain-cert.service
+  printf '%s\n' "[Unit]" "Description=DAK: certificate renewal" "[Timer]" "OnCalendar=*-*-* 03,15:00:00" \
+    "RandomizedDelaySec=1h" "Persistent=true" "[Install]" "WantedBy=timers.target" \
+    > /etc/systemd/system/kombain-cert.timer
+  systemctl daemon-reload
+  systemctl enable --now kombain-cert.timer >/dev/null 2>&1 || true
+}
+
+render_tls() {
+  if ! has_proto naive && ! has_proto anytls; then rm -f "$KB_DIR/tls.json"; return 0; fi
+  local nv_users="" at_users="" first=1 i=0 inb="" tls
+  while IFS='|' read -r _ _ hypass _; do
+    [ -n "$hypass" ] || continue
+    i=$((i + 1))
+    [ $first = 1 ] || { nv_users+=","; at_users+=","; }; first=0
+    nv_users+=$(printf '{"username":"u%s","password":"%s"}' "$i" "$hypass")
+    at_users+=$(printf '{"name":"u%s","password":"%s"}' "$i" "$hypass")
+  done < "$(users_file)"
+  tls=$(printf '{"enabled":true,"server_name":"%s","certificate_path":"%s","key_path":"%s"}' "$DOMAIN" "$(domain_cert)" "$(domain_key)")
+  if has_proto naive; then
+    inb+=$(printf '{"type":"naive","tag":"naive-in","listen":"::","listen_port":%s,"network":"tcp","users":[%s],"tls":%s}' "$NV_PORT" "$nv_users" "$tls")
+  fi
+  if has_proto anytls; then
+    [ -n "$inb" ] && inb+=","
+    inb+=$(printf '{"type":"anytls","tag":"anytls-in","listen":"::","listen_port":%s,"users":[%s],"tls":%s}' "$AT_PORT" "$at_users" "$tls")
+  fi
+  printf '{\n  "log": {"level": "warn"},\n  "inbounds": [%s],\n  "outbounds": [{"type": "socks", "tag": "xray", "server": "127.0.0.1", "server_port": %s}]\n}\n' \
+    "$inb" "$KB_SOCKS_PORT" > "$KB_DIR/tls.json"
+  chmod 600 "$KB_DIR/tls.json"
 }
 
 render_tuic() {
@@ -655,6 +765,20 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 EOF
   fi
+  if has_proto naive || has_proto anytls; then
+    cat > /etc/systemd/system/kombain-tls.service <<EOF
+[Unit]
+Description=DAK NaiveProxy + AnyTLS
+After=network-online.target kombain-xray.service
+[Service]
+ExecStart=$KB_BIN/kombain-singbox run -c $KB_DIR/tls.json
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
+EOF
+  fi
   if has_proto hy2; then
     cat > /etc/systemd/system/kombain-hysteria.service <<EOF
 [Unit]
@@ -719,9 +843,9 @@ EOF
   systemctl daemon-reload
 }
 
-svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; has_proto sudoku && echo sudoku; has_proto tg && echo mtg; [ -n "$SUB_PORT" ] && echo sub; return 0; }
+svc_list() { echo "xray"; has_proto hy2 && echo hysteria; has_proto tuic && echo tuic; { has_proto naive || has_proto anytls; } && echo tls; has_proto sudoku && echo sudoku; has_proto tg && echo mtg; [ -n "$SUB_PORT" ] && echo sub; return 0; }
 
-svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; sudoku) echo Sudoku ;; sub) echo Подписка ;; esac; }
+svc_title() { case $1 in xray) echo Xray ;; hysteria) echo Hysteria2 ;; tuic) echo TUIC ;; mtg) echo Telegram ;; sudoku) echo Sudoku ;; sub) echo Подписка ;; tls) echo "NaiveProxy/AnyTLS" ;; esac; }
 
 restart_services() {
   [ "$KB_SYSTEMD" = 1 ] || return 0
@@ -738,7 +862,7 @@ restart_services() {
     systemctl is-active --quiet "kombain-$s" || die "$(svc_title "$s") не запустился: $(journalctl -u "kombain-$s" -n 5 --no-pager | tail -3 | tr '\n' ' ')"
   done
   # services of protocols that were switched off
-  for s in hysteria tuic sudoku mtg sub; do
+  for s in hysteria tuic sudoku mtg sub tls; do
     svc_list | grep -qx "$s" || systemctl disable --now "kombain-$s" >/dev/null 2>&1 || true
   done
   return 0
@@ -756,6 +880,10 @@ open_firewall() {
     has_proto tg && ufw allow "$TG_PORT/tcp" >/dev/null
     has_proto sudoku && ufw allow "$SD_PORT/tcp" >/dev/null
     [ -n "$SUB_PORT" ] && ufw allow "$SUB_PORT/tcp" >/dev/null
+    has_proto naive && ufw allow "$NV_PORT/tcp" >/dev/null
+    has_proto anytls && ufw allow "$AT_PORT/tcp" >/dev/null
+    has_proto cdn && ufw allow "$CDN_PORT/tcp" >/dev/null
+    [ -n "$DOMAIN" ] && [ "$KB_ACME" = 1 ] && ufw allow 80/tcp >/dev/null
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
     step "Открываю порты в firewalld"
     firewall-cmd -q --permanent --add-port="$PORT/tcp"
@@ -766,7 +894,20 @@ open_firewall() {
     has_proto tg && firewall-cmd -q --permanent --add-port="$TG_PORT/tcp"
     has_proto sudoku && firewall-cmd -q --permanent --add-port="$SD_PORT/tcp"
     [ -n "$SUB_PORT" ] && firewall-cmd -q --permanent --add-port="$SUB_PORT/tcp"
+    has_proto naive && firewall-cmd -q --permanent --add-port="$NV_PORT/tcp"
+    has_proto anytls && firewall-cmd -q --permanent --add-port="$AT_PORT/tcp"
+    has_proto cdn && firewall-cmd -q --permanent --add-port="$CDN_PORT/tcp"
+    [ -n "$DOMAIN" ] && [ "$KB_ACME" = 1 ] && firewall-cmd -q --permanent --add-port=80/tcp
     firewall-cmd -q --reload
+  fi
+  return 0
+}
+
+open_port() { # one "port/proto" right now (before a service needs it)
+  [ "$KB_SYSTEMD" = 1 ] || return 0
+  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then ufw allow "$1" >/dev/null
+  elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    firewall-cmd -q --permanent --add-port="$1"; firewall-cmd -q --reload
   fi
   return 0
 }
@@ -808,6 +949,18 @@ user_links() { # name uuid hypass index -> "proto link" lines
   if has_proto sudoku; then
     echo "sudoku $(sd_link "$name" "$NAME · $name · Sudoku")"
   fi
+  if has_proto naive && [ -n "$DOMAIN" ]; then
+    label=$(urlenc "$NAME · $name · NaiveProxy")
+    echo "naive naive+https://u$i:$hypass@$DOMAIN:$NV_PORT#$label"
+  fi
+  if has_proto anytls && [ -n "$DOMAIN" ]; then
+    label=$(urlenc "$NAME · $name · AnyTLS")
+    echo "anytls anytls://$hypass@$DOMAIN:$AT_PORT/?sni=$DOMAIN&fp=chrome#$label"
+  fi
+  if has_proto cdn && [ -n "$CDN_HOST" ]; then
+    label=$(urlenc "$NAME · $name · CDN")
+    echo "cdn vless://$uuid@$CDN_HOST:443?encryption=$(urlenc "${XH_ENC:-none}")&security=tls&sni=$CDN_HOST&fp=chrome&alpn=h2&type=xhttp&host=$CDN_HOST&path=$(urlenc "$CDN_PATH")&mode=packet-up#$label"
+  fi
   if has_proto hy2; then
     label=$(urlenc "$NAME · $name · Hysteria2")
     echo "hy2 hysteria2://u$i:$hypass@$h:$HY_PORT/?sni=$SNI&insecure=1&obfs=salamander&obfs-password=$HY_OBFS${HY_HOP:+&mport=$HY_HOP}#$label"
@@ -841,9 +994,10 @@ print_result() {
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s","sdPort":%s}' \
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s","sdPort":%s,"domain":"%s","nvPort":%s,"atPort":%s,"cdnHost":"%s","cdnPort":%s,"ip":"%s"}' \
     "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}" \
-    "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}" "$SD_PORT")
+    "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}" "$SD_PORT" \
+    "${DOMAIN:-}" "${NV_PORT:-0}" "${AT_PORT:-0}" "${CDN_HOST:-}" "${CDN_PORT:-0}" "$HOST")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
   [ "${KB_WITH_EXPORT:-0}" = 1 ] && emit_export
@@ -851,7 +1005,7 @@ print_result() {
 }
 
 # what a new server needs to take over: everything else is rendered from these
-EXPORT_FILES="state.env users sudoku.keys sub.crt sub.key hy.crt hy.key"
+EXPORT_FILES="state.env users sudoku.keys sub.crt sub.key hy.crt hy.key domain.crt domain.key"
 
 emit_export() {
   local f list=""
@@ -881,7 +1035,7 @@ render_sub() {
   done < "$(users_file)"
 }
 
-render_all() { render_xray; render_hysteria; render_hop; render_tuic; render_sudoku; render_mtg; render_sub; write_units; }
+render_all() { render_xray; render_hysteria; render_hop; render_tuic; render_tls; render_sudoku; render_mtg; render_sub; write_units; }
 
 check_ports() {
   [ "$PORT" != "$XH_PORT" ] || ! has_proto xhttp || die "порты VLESS и XHTTP должны различаться"
@@ -1279,7 +1433,7 @@ busy_ports() {
 
 # a random free port 20000–59999 that no other Kombain service uses
 pick_port() {
-  local used=" $(busy_ports | tr '\n' ' ') $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT $* " p i
+  local used=" $(busy_ports | tr '\n' ' ') $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT ${NV_PORT:-0} ${AT_PORT:-0} ${CDN_PORT:-0} 80 $* " p i
   for i in $(seq 1 200); do
     p=$((20000 + RANDOM % 40000))
     case $used in *" $p "*) continue ;; esac
@@ -1549,13 +1703,128 @@ cmd_import() {
   print_result
 }
 
+# the domain must point at this server, otherwise Let's Encrypt can't check it
+check_domain() {
+  [[ $DOMAIN =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$ ]] || die "«$DOMAIN» не похоже на доменное имя"
+  [ "$KB_TEST" = 1 ] && return 0
+  local ips own
+  ips=$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
+  [ -n "$ips" ] || die "домен $DOMAIN пока никуда не указывает — добавьте у регистратора A-запись с адресом $HOST и подождите 5–15 минут"
+  own=$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || echo "$HOST")
+  case " $ips " in
+    *" $own "*|*" $HOST "*) ;;
+    *) die "домен $DOMAIN указывает на ${ips% }, а этот сервер — $own. Исправьте A-запись у регистратора (изменения доходят за 5–15 минут)" ;;
+  esac
+}
+
+cmd_set_domain() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local d="" protos="naive,anytls" nv="" at=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --domain) d=$2; shift 2 ;;
+      --nv-port) nv=$2; shift 2 ;;
+      --at-port) at=$2; shift 2 ;;
+      --protocols) protos=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  d=$(echo "$d" | tr 'A-Z' 'a-z' | sed 's#^https\{0,1\}://##; s#/.*##; s/\.$//')
+  [ -n "$d" ] || die "укажите --domain"
+  [ "$d" != "${DOMAIN:-}" ] && rm -f "$(domain_cert)" "$(domain_key)"
+  DOMAIN=$d
+  check_domain
+  step "Домен $DOMAIN указывает на этот сервер"
+  # NaiveProxy looks most like a browser on 443 — if VLESS doesn't hold it already
+  local used443=0
+  { [ "$PORT" = 443 ] || { has_proto xhttp && [ "$XH_PORT" = 443 ]; } || { has_proto tg && [ "$TG_PORT" = 443 ]; }; } && used443=1
+  if [ -n "$nv" ]; then NV_PORT=$nv
+  elif [ "${NV_PORT:-0}" = 0 ]; then
+    if [ $used443 = 0 ] && ! busy_ports | grep -qx 443; then NV_PORT=443; else NV_PORT=$(pick_port); fi
+  fi
+  [ -n "$at" ] && AT_PORT=$at
+  [ "${AT_PORT:-0}" = 0 ] && AT_PORT=$(pick_port "$NV_PORT")
+  [ "$NV_PORT" != "$AT_PORT" ] || die "порты NaiveProxy и AnyTLS должны различаться"
+  PROTOCOLS=$(echo ",$PROTOCOLS," | sed 's/,naive,/,/g; s/,anytls,/,/g; s/^,//; s/,$//')
+  case ",$protos," in *,naive,*) PROTOCOLS="$PROTOCOLS,naive" ;; esac
+  case ",$protos," in *,anytls,*) PROTOCOLS="$PROTOCOLS,anytls" ;; esac
+  has_proto naive || has_proto anytls || die "выберите хотя бы один протокол: naive, anytls"
+  download_singbox
+  issue_cert
+  save_state
+  render_all; open_firewall; restart_services
+  local what=""
+  has_proto naive && what="NaiveProxy на порту $NV_PORT"
+  has_proto anytls && what="${what:+$what, }AnyTLS на порту $AT_PORT"
+  step "Готово: $what — у каждого пользователя новые ссылки"
+  print_result
+}
+
+cmd_disable_domain() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  PROTOCOLS=$(echo ",$PROTOCOLS," | sed 's/,naive,/,/g; s/,anytls,/,/g; s/^,//; s/,$//')
+  local old1="${NV_PORT:-0}/tcp" old2="${AT_PORT:-0}/tcp"
+  DOMAIN=""; NV_PORT=0; AT_PORT=0
+  save_state
+  render_all; restart_services
+  if [ "$KB_SYSTEMD" = 1 ]; then
+    systemctl disable --now kombain-cert.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-cert.timer /etc/systemd/system/kombain-cert.service /etc/systemd/system/kombain-tls.service
+    systemctl daemon-reload
+  fi
+  close_ports "$old1" "$old2"
+  step "NaiveProxy и AnyTLS выключены"
+  print_result
+}
+
+cmd_enable_cdn() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local h="" p=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --cdn-host) h=$2; shift 2 ;;
+      --cdn-port) p=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  h=$(echo "$h" | tr 'A-Z' 'a-z' | sed 's#^https\{0,1\}://##; s#/.*##; s/\.$//')
+  [[ $h =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$ ]] || die "укажите адрес CDN (--cdn-host), например cdn.example.com"
+  CDN_HOST=$h
+  [ -n "$p" ] && CDN_PORT=$p
+  [ "${CDN_PORT:-0}" = 0 ] && CDN_PORT=$(pick_port)
+  [ -n "$CDN_PATH" ] || CDN_PATH=/$(rand_hex 8)
+  [ -n "$XH_ENC" ] || gen_vlessenc
+  has_proto cdn || PROTOCOLS="$PROTOCOLS,cdn"
+  save_state
+  render_all; open_firewall; restart_services
+  step "Готово. В настройках CDN укажите источник (origin): http://$HOST:$CDN_PORT — протокол HTTP, без кэширования"
+  print_result
+}
+
+cmd_disable_cdn() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  PROTOCOLS=$(echo ",$PROTOCOLS," | sed 's/,cdn,/,/g; s/^,//; s/,$//')
+  local old="${CDN_PORT:-0}/tcp"
+  CDN_HOST=""; CDN_PORT=0
+  save_state
+  render_all; restart_services
+  close_ports "$old"
+  step "Подключение через CDN выключено"
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   [ -f "$KB_DIR/hop.sh" ] && sh "$KB_DIR/hop.sh" down >/dev/null 2>&1
   if [ "$KB_SYSTEMD" = 1 ]; then
     systemctl disable --now kombain-hop >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-hop.service
-    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-sudoku kombain-mtg kombain-sub kombain-ports.timer >/dev/null 2>&1 || true
+    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-sudoku kombain-mtg kombain-sub kombain-tls kombain-cert.timer kombain-ports.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-tls.service /etc/systemd/system/kombain-cert.service /etc/systemd/system/kombain-cert.timer
     rm -f /etc/systemd/system/kombain-sudoku.service
     rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
     rm -f /etc/systemd/system/kombain-xray.service /etc/systemd/system/kombain-hysteria.service \
@@ -1563,7 +1832,7 @@ cmd_uninstall() {
       /etc/systemd/system/kombain-sub.service /etc/sysctl.d/99-kombain.conf
     systemctl daemon-reload
   fi
-  rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg" "$KB_BIN/kombain-sudoku"
+  rm -rf "$KB_DIR" "$KB_SHARE" "$KB_BIN/kombain-xray" "$KB_BIN/kombain-hysteria" "$KB_BIN/kombain-singbox" "$KB_BIN/kombain-mtg" "$KB_BIN/kombain-sudoku" "$KB_BIN/kombain-lego"
   step "DAK удалён с сервера"
 }
 
@@ -1592,8 +1861,12 @@ case ${1-} in
   auto-ports) shift; cmd_auto_ports "$@" ;;
   enable-bridge) shift; cmd_enable_bridge "$@" ;;
   harden) shift; cmd_harden "$@" ;;
+  set-domain) shift; cmd_set_domain "$@" ;;
+  disable-domain) cmd_disable_domain ;;
+  enable-cdn) shift; cmd_enable_cdn "$@" ;;
+  disable-cdn) cmd_disable_cdn ;;
   export) cmd_export ;;
   import) shift; cmd_import "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | export | import | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | set-domain | disable-domain | enable-cdn | disable-cdn | export | import | uninstall" ;;
 esac

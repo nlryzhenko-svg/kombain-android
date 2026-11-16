@@ -47,8 +47,18 @@ object RouteResolver {
                 ?.let { geo("https://ipwho.is/$it") } ?: server.takeIf { exitNode == null }
         } else geo("https://ipwho.is/")
         val cascade = !blockedOnly && exit != null && serverIp != null && exit.ip != serverIp
+        // XHTTP through a CDN: the first hop is the CDN's edge, the server itself comes next
+        val viaCdn = node != null && node.cdnHost.isNotBlank() && bean.serverAddress.equals(node.cdnHost, true)
         return buildList {
             add(Node("📱", "Вы"))
+            if (viaCdn) {
+                add(Node("☁️", "CDN", place(server).orEmpty()))
+                val own = runCatching { InetAddress.getByName(node!!.host.trim()).hostAddress }.getOrNull()
+                val g = if (!blockedOnly) exit else own?.let { geo("https://ipwho.is/$it") }
+                add(Node(flag(g?.code), node!!.name, place(g).orEmpty()))
+                add(Node("🌍", "Интернет", if (blockedOnly) "заблокированное" else exit?.ip.orEmpty()))
+                return@buildList
+            }
             add(Node(flag(server?.code), node?.name ?: place(server) ?: profile.displayName(),
                 if (node != null) place(server).orEmpty() else server?.country.orEmpty()))
             if (cascade || exitNode != null) {

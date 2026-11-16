@@ -217,7 +217,8 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
     }
 
     private fun protoName(p: String) = when (p) {
-        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; "sudoku" -> "Sudoku"; else -> p
+        "vless" -> "VLESS"; "xhttp" -> "XHTTP"; "hy2" -> "Hysteria2"; "tuic" -> "TUIC"; "tg" -> "Telegram"; "sudoku" -> "Sudoku"
+        "naive" -> "NaiveProxy"; "anytls" -> "AnyTLS"; "cdn" -> "CDN"; else -> p
     }
 
     private fun shareTelegram(s: ServerNode) {
@@ -257,6 +258,69 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             .show()
     }
 
+    private fun textInput(hint: String, value: String): Pair<LinearLayout, EditText> {
+        val input = EditText(requireContext()).apply {
+            this.hint = hint
+            setText(value)
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val box = LinearLayout(requireContext()).apply {
+            setPadding(dp2px(22), dp2px(8), dp2px(22), 0)
+            addView(input, LinearLayout.LayoutParams(-1, -2))
+        }
+        return box to input
+    }
+
+    private fun cleanHost(t: String) = t.trim().lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/').trimEnd('.')
+
+    /** Own domain → NaiveProxy + AnyTLS (they need a real certificate, Let's Encrypt gives one for the domain). */
+    private fun domainDialog(s: ServerNode) {
+        val (box, input) = textInput("например vpn.example.com", s.domain)
+        val b = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(if (s.hasDomain) "Домен ${s.domain}" else "Свой домен")
+            .setMessage("NaiveProxy и AnyTLS выглядят как обычный сайт с настоящим сертификатом — это страховка на случай, " +
+                "если начнут распознавать VLESS.\n\nУ регистратора домена добавьте A-запись с адресом ${s.host} " +
+                "и подождите 5–15 минут. Подойдёт и имя, которое выдал хостер, если оно уже указывает на этот сервер. " +
+                "Сертификат Let's Encrypt DAK получит и будет продлевать сам (нужен свободный порт 80).")
+            .setView(box)
+            .setPositiveButton(if (s.hasDomain) "Сменить" else "Подключить") { _, _ ->
+                val d = cleanHost(input.text.toString())
+                if (d.contains('.')) { Deployer.setDomain(s, d); scrollTop() }
+                else snackbar("Введите доменное имя").show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+        if (s.hasDomain) b.setNeutralButton("Выключить") { _, _ ->
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Выключить NaiveProxy и AnyTLS?")
+                .setMessage("Их профили перестанут работать. Домен и остальные протоколы не трогаются.")
+                .setPositiveButton("Выключить") { _, _ -> Deployer.disableDomain(s); scrollTop() }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+        b.show()
+    }
+
+    /** XHTTP through a CDN: survives a block of the server's own IP. */
+    private fun cdnDialog(s: ServerNode) {
+        val (box, input) = textInput("адрес в CDN, например cdn.example.com", s.cdnHost)
+        val b = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(if (s.hasCdn) "CDN ${s.cdnHost}" else "Подключение через CDN")
+            .setMessage("Телефон подключается не к серверу, а к сети доставки контента (CDN), а она уже — к серверу. " +
+                "Блокировка IP сервера на это не влияет.\n\nВ личном кабинете CDN создайте ресурс: " +
+                "свой домен (или тот, что выдаст CDN) и источник — сервер, адрес и порт DAK покажет после включения. " +
+                "Cloudflare из России сейчас работает с перебоями — лучше другой CDN.\n\nАдрес, по которому CDN отдаёт ресурс:")
+            .setView(box)
+            .setPositiveButton(if (s.hasCdn) "Сменить" else "Включить") { _, _ ->
+                val h = cleanHost(input.text.toString())
+                if (h.contains('.')) { Deployer.enableCdn(s, h); scrollTop() }
+                else snackbar("Введите адрес ресурса в CDN").show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+        if (s.hasCdn) b.setNeutralButton("Выключить") { _, _ -> Deployer.disableCdn(s); scrollTop() }
+        b.show()
+    }
+
     private fun moreMenu(s: ServerNode) {
         val tgItem = when {
             s.role == "exit" -> null
@@ -269,6 +333,8 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             11 to getString(R.string.srv_m_portskeys),
             tgItem?.let { 4 to it },
             if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
+            if (s.role != "exit") 13 to (if (s.hasDomain) "Домен ${s.domain}: NaiveProxy и AnyTLS" else "Свой домен: NaiveProxy и AnyTLS…") else null,
+            if (s.role != "exit") 14 to (if (s.hasCdn) "CDN ${s.cdnHost}" else "Подключение через CDN…") else null,
             if (s.role == "single" && Deployer.entryOf(s) == null) 12 to getString(R.string.srv_m_attach) else null,
             10 to getString(R.string.srv_m_move),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
@@ -288,6 +354,10 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                         .setPositiveButton(R.string.srv_sd_yes) { _, _ -> Deployer.enableSudoku(s); scrollTop() }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+
+                    13 -> if (Deployer.running) snackbar(R.string.srv_busy).show() else domainDialog(s)
+
+                    14 -> if (Deployer.running) snackbar(R.string.srv_busy).show() else cdnDialog(s)
 
                     12 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
                     else (activity as? MainActivity)?.displayFragment(ServerWizardFragment.attachTo(s))

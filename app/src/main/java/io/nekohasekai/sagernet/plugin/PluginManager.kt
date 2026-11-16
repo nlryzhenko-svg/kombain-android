@@ -73,6 +73,8 @@ object PluginManager {
         return when (pluginId) {
             "hysteria-plugin" -> soIfExist("libhysteria.so")
             "hysteria2-plugin" -> soIfExist("libhysteria2.so")
+            // DAK bundles NaiveProxy (the official Android build, see .github/workflows/naive-plugin.yml)
+            "naive-plugin" -> soIfExist("libnaive.so")
             else -> null
         }
     }

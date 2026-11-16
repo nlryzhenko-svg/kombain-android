@@ -63,6 +63,13 @@ data class ServerNode(
     var statsAt: Long = 0L,
     /** last background health check: "" = fine, otherwise a short problem text */
     var health: String = "",
+    /** own domain: NaiveProxy + AnyTLS on a Let's Encrypt certificate */
+    var domain: String = "",
+    var nvPort: Int = 0,
+    var atPort: Int = 0,
+    /** XHTTP through a CDN: the address clients use and the origin port the CDN fetches from */
+    var cdnHost: String = "",
+    var cdnPort: Int = 0,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
@@ -73,6 +80,7 @@ data class ServerNode(
         put("sniAlts", sniAlts); put("hyHop", hyHop)
         put("backup", backup); put("backupAt", backupAt); put("altSecret", altSecret)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
+        put("domain", domain); put("nvPort", nvPort); put("atPort", atPort); put("cdnHost", cdnHost); put("cdnPort", cdnPort)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
 
@@ -93,11 +101,15 @@ data class ServerNode(
             backup = o.optString("backup"), backupAt = o.optLong("backupAt"), altSecret = o.optString("altSecret"),
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
             stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
+            domain = o.optString("domain"), nvPort = o.optInt("nvPort"), atPort = o.optInt("atPort"),
+            cdnHost = o.optString("cdnHost"), cdnPort = o.optInt("cdnPort"),
         )
     }
 
     val hasTelegram get() = "tg" in protocols.split(',')
     val hasSudoku get() = "sudoku" in protocols.split(',')
+    val hasDomain get() = domain.isNotBlank() && protocols.split(',').any { it == "naive" || it == "anytls" }
+    val hasCdn get() = cdnHost.isNotBlank() && "cdn" in protocols.split(',')
 }
 
 object ServerStore {

@@ -43,6 +43,8 @@ object Watchdog {
 
     fun start(service: BaseService.Interface) {
         stop()
+        bigFailed = false
+        lastBigProbe = System.currentTimeMillis()
         if (!DataStore.kbWatchdog) return
         job = GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -124,14 +126,58 @@ object Watchdog {
         }
     }
 
+    private var lastBigProbe = 0L
+    private var bigFailed = false
+
     private fun probeTunnel(service: BaseService.Interface): Boolean {
         val box = service.data.proxy?.box ?: return true
-        return try {
+        val small = try {
             Libcore.urlTest(box, DataStore.connectionTestURL, 5000)
             true
         } catch (e: Exception) {
             false
         }
+        if (!small) return false
+        // ТСПУ «16 КБ»: TCP to a foreign hosting address freezes after the first ~16 KB — a tiny test request
+        // still passes. Every few minutes pull 64 KB through the tunnel to see whether data really flows.
+        val now = System.currentTimeMillis()
+        if (io.nekohasekai.sagernet.kombain.BlockedLists.enabled) return true
+        // after a failed one, check again on every retry until it passes or the watchdog acts
+        if (!bigFailed && now - lastBigProbe < BIG_EVERY) return true
+        lastBigProbe = now
+        val ok = bigProbe()
+        bigFailed = !ok
+        if (!ok) log("малый запрос прошёл, а 64 КБ не скачались — похоже на заморозку соединения")
+        return ok
+    }
+
+    private const val BIG_EVERY = 3 * 60_000L
+
+    /** 64 KB through DAK's local proxy (the tunnel) within 10 s. */
+    private fun bigProbe(): Boolean = runCatching {
+        val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", DataStore.mixedPort))
+        val conn = URL("https://speed.cloudflare.com/__down?bytes=65536").openConnection(proxy) as HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        val started = System.currentTimeMillis()
+        var total = 0
+        try {
+            conn.inputStream.use { input ->
+                val buf = ByteArray(16384)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    total += n
+                    if (System.currentTimeMillis() - started > 10_000) break
+                }
+            }
+        } finally {
+            conn.disconnect()
+        }
+        total >= 60_000
+    }.getOrElse { e ->
+        // a failure of the test site itself must not look like a frozen tunnel: only a timeout counts
+        e !is java.net.SocketTimeoutException
     }
 
     private fun deviceIdle(): Boolean =
@@ -220,7 +266,17 @@ object Watchdog {
             val others = NetMemory.fallbackOrder(currentId)
             if (others.isNotEmpty()) {
                 log("ищу живой сервер в группе (${others.size})")
-                val best = AutoPick.test(others).best?.first
+                // a frozen TCP connection: other TCP protocols to the same address freeze the same way —
+                // try UDP (Hysteria2, TUIC) and other servers first
+                val host = runCatching { current?.requireBean()?.serverAddress }.getOrNull()
+                val udp = setOf(io.nekohasekai.sagernet.database.ProxyEntity.TYPE_HYSTERIA,
+                    io.nekohasekai.sagernet.database.ProxyEntity.TYPE_TUIC)
+                val preferred = if (bigFailed) others.filter {
+                    it.type in udp || runCatching { it.requireBean().serverAddress }.getOrNull() != host
+                } else emptyList()
+                if (preferred.isNotEmpty()) log("заморозка TCP — сначала пробую UDP и другие серверы")
+                val best = (preferred.takeIf { it.isNotEmpty() }?.let { AutoPick.test(it).best?.first })
+                    ?: AutoPick.test(others).best?.first
                 if (best != null) {
                     DataStore.selectedProxy = best.id
                     message = app.getString(R.string.kb_wd_switch, name, best.displayName())
