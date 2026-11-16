@@ -1,0 +1,37 @@
+name: NaiveProxy binaries for DAK
+# Fetches the official NaiveProxy Android plugin and keeps only libnaive.so for every ABI
+# (DAK bundles it as app/executableSo/<abi>/libnaive.so).
+on:
+  push:
+    paths: [ '.github/workflows/naive-plugin.yml', 'buildScript/naive-version.txt' ]
+permissions:
+  contents: read
+jobs:
+  naive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download plugin APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(cat buildScript/naive-version.txt 2>/dev/null || true)
+          [ -n "$tag" ] || tag=$(gh release view -R klzgrad/naiveproxy --json tagName -q .tagName)
+          echo "tag $tag"
+          gh release view "$tag" -R klzgrad/naiveproxy --json assets -q '.assets[].name'
+          mkdir -p apk out
+          gh release download "$tag" -R klzgrad/naiveproxy -p '*plugin*.apk' -D apk
+          ls -la apk
+          for f in apk/*.apk; do
+            for abi in arm64-v8a armeabi-v7a x86_64; do
+              if unzip -l "$f" "lib/$abi/libnaive.so" >/dev/null 2>&1; then
+                mkdir -p "out/$abi"; unzip -o -j "$f" "lib/$abi/libnaive.so" -d "out/$abi" >/dev/null
+              fi
+            done
+          done
+          echo "$tag" > out/VERSION
+          find out -type f | xargs ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libnaive
+          path: out
