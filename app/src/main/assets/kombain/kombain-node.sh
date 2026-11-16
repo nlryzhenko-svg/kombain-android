@@ -81,6 +81,7 @@ SB_REPO=${SB_REPO:-https://github.com/SagerNet/sing-box}
 MTG_REPO=${MTG_REPO:-https://github.com/9seconds/mtg}
 SD_URL_BASE=${SD_URL_BASE:-https://github.com/SUDOKU-ASCII/sudoku/releases/latest/download}
 LEGO_REPO=${LEGO_REPO:-https://github.com/go-acme/lego}
+LEGO_TAG=${LEGO_TAG:-v4.35.2}
 KB_ACME=${KB_ACME:-1}                # 0 = self-signed certificate for the domain (testing)
 
 step() { echo "KB_STEP $*"; }
@@ -187,15 +188,13 @@ download_singbox() { # TUIC, NaiveProxy and AnyTLS run on sing-box
   rm -rf "$tmp"
 }
 
-download_lego() { # Let's Encrypt client (one static binary)
+download_lego() { # Let's Encrypt client (one static binary). Pinned to v4: lego 5 changed its command line.
   [ "$KB_DOWNLOAD" = 1 ] || return 0
-  [ -x "$KB_BIN/kombain-lego" ] && return 0
+  [ -x "$KB_BIN/kombain-lego" ] && "$KB_BIN/kombain-lego" --version 2>/dev/null | grep -q "version 4\." && return 0
   detect_arch
   step "Скачиваю lego (сертификаты Let's Encrypt)"
-  local tmp tag arch; tmp=$(mktemp -d)
+  local tmp tag=$LEGO_TAG arch; tmp=$(mktemp -d)
   case $SB_ARCH in amd64) arch=amd64 ;; arm64) arch=arm64 ;; *) arch=armv7 ;; esac
-  tag=$(latest_tag "$LEGO_REPO")
-  [ -n "$tag" ] || die "не удалось узнать версию lego"
   curl -fsSL --retry 3 -o "$tmp/lego.tgz" "$LEGO_REPO/releases/download/$tag/lego_${tag}_linux_$arch.tar.gz" || die "не удалось скачать lego"
   tar -xzf "$tmp/lego.tgz" -C "$tmp"
   install -m 755 "$tmp/lego" "$KB_BIN/kombain-lego"
@@ -500,8 +499,8 @@ issue_cert() {
     die "порт 80 занят другой программой — Let's Encrypt проверяет домен через него. Освободите порт 80 и повторите"
   fi
   local out
-  out=$("$KB_BIN/kombain-lego" --accept-tos --email "dak@$DOMAIN" --domains "$DOMAIN" --http --path "$KB_DIR/lego" run 2>&1) \
-    || die "Let's Encrypt не выдал сертификат: $(echo "$out" | grep -iE 'error|urn:' | tail -2 | tr '\n' ' ' | cut -c1-300)"
+  out=$("$KB_BIN/kombain-lego" --accept-tos --domains "$DOMAIN" --http --path "$KB_DIR/lego" run 2>&1) \
+    || die "Let's Encrypt не выдал сертификат: $(echo "$out" | grep -iE 'level=error|urn:|error:' | grep -v -- '--' | tail -2 | tr '\n' ' ' | cut -c1-400)"
   install_cert
   cert_timer
 }
@@ -513,11 +512,14 @@ install_cert() { # lego's files -> domain.crt / domain.key
   install -m 600 "$d/$DOMAIN.key" "$(domain_key)"
 }
 
-cert_timer() { # checked twice a day; lego renews 30 days before expiry
+cert_timer() { # checked twice a day; lego renews 30 days before expiry and runs the hook
   [ "$KB_SYSTEMD" = 1 ] || return 0
-  local hook="install -m 600 $KB_DIR/lego/certificates/$DOMAIN.crt $KB_DIR/domain.crt && install -m 600 $KB_DIR/lego/certificates/$DOMAIN.key $KB_DIR/domain.key && systemctl restart kombain-tls"
+  printf '%s\n' '#!/bin/sh' "install -m 600 $KB_DIR/lego/certificates/$DOMAIN.crt $KB_DIR/domain.crt" \
+    "install -m 600 $KB_DIR/lego/certificates/$DOMAIN.key $KB_DIR/domain.key" "systemctl restart kombain-tls" \
+    > "$KB_DIR/cert-hook.sh"
+  chmod 700 "$KB_DIR/cert-hook.sh"
   printf '%s\n' "[Unit]" "Description=DAK: renew the Let's Encrypt certificate" "[Service]" "Type=oneshot" \
-    "ExecStart=$KB_BIN/kombain-lego --accept-tos --email dak@$DOMAIN --domains $DOMAIN --http --path $KB_DIR/lego renew --days 30 --renew-hook \"$hook\"" \
+    "ExecStart=$KB_BIN/kombain-lego --accept-tos --domains $DOMAIN --http --path $KB_DIR/lego renew --days 30 --renew-hook $KB_DIR/cert-hook.sh" \
     > /etc/systemd/system/kombain-cert.service
   printf '%s\n' "[Unit]" "Description=DAK: certificate renewal" "[Timer]" "OnCalendar=*-*-* 03,15:00:00" \
     "RandomizedDelaySec=1h" "Persistent=true" "[Install]" "WantedBy=timers.target" \
