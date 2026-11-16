@@ -36,6 +36,9 @@ class StatusCardController(root: View, private val activity: MainActivity) {
     private val progress: KnobSpinner = root.findViewById(R.id.status_progress)
     private val pulse: View = root.findViewById(R.id.status_pulse)
     private val graph: io.nekohasekai.sagernet.widget.SpeedGraphView = root.findViewById(R.id.status_graph)
+    private val route: io.nekohasekai.sagernet.widget.RouteMapView = root.findViewById(R.id.status_route)
+    /** profile id the route was worked out for (0 = none yet) */
+    private var routeFor = 0L
     private var pulseAnim: android.animation.Animator? = null
     private val ticker = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -100,11 +103,17 @@ class StatusCardController(root: View, private val activity: MainActivity) {
             if (connectedSince == 0L) {
                 connectedSince = SystemClock.elapsedRealtime()
                 celebrate()
+                routeFor = 0L
+                route.reset()
             }
         } else {
             connectedSince = 0L
             graph.clear()
+            routeFor = 0L
+            route.reset()
         }
+        route.isVisible = connected
+        route.running = connected
         graph.isVisible = connected
         setPulsing(busy)
         ticker.removeCallbacks(tick)
@@ -152,6 +161,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
 
     fun release() {
         ticker.removeCallbacks(tick)
+        route.running = false
         pulseAnim?.cancel()
     }
 
@@ -185,6 +195,7 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         val ctx = card.context
         detail.typeface = android.graphics.Typeface.MONOSPACE
         graph.add(rx, tx)
+        route.setRates(tx, rx)
         val speed = "↓ ${Formatter.formatFileSize(ctx, rx)}/с   ↑ ${Formatter.formatFileSize(ctx, tx)}/с"
         detail.text = testResult?.let { "$it   $speed" } ?: speed
     }
@@ -196,6 +207,22 @@ class StatusCardController(root: View, private val activity: MainActivity) {
             val profile = runCatching { ProfileManager.getProfile(id) }.getOrNull()
             onMainDispatcher {
                 server.text = profile?.displayName() ?: card.context.getString(R.string.kb_no_server)
+                if (state == BaseService.State.Connected && profile != null && routeFor != profile.id) showRoute(profile)
+            }
+        }
+    }
+
+    /** The route at once from what is known, then with flags and the real exit address, then the ping. */
+    private fun showRoute(profile: io.nekohasekai.sagernet.database.ProxyEntity) {
+        routeFor = profile.id
+        route.setRoute(io.nekohasekai.sagernet.kombain.RouteResolver.quick(profile), true)
+        runOnDefaultDispatcher {
+            val full = runCatching { io.nekohasekai.sagernet.kombain.RouteResolver.resolve(profile) }.getOrNull()
+            val ms = runCatching { activity.urlTest() }.getOrNull()
+            onMainDispatcher {
+                if (routeFor != profile.id || state != BaseService.State.Connected) return@onMainDispatcher
+                if (full != null) route.setRoute(full, full.size != route.nodeCount)
+                if (ms != null && ms > 0) route.setPing("$ms мс")
             }
         }
     }
@@ -207,7 +234,9 @@ class StatusCardController(root: View, private val activity: MainActivity) {
         detail.setText(R.string.connection_test_testing)
         runOnDefaultDispatcher {
             val result = try {
-                card.context.getString(R.string.kb_ping, activity.urlTest())
+                val ms = activity.urlTest()
+                onMainDispatcher { route.setPing("$ms мс") }
+                card.context.getString(R.string.kb_ping, ms)
             } catch (e: Exception) {
                 Logs.w(e)
                 card.context.getString(R.string.kb_ping_fail)
