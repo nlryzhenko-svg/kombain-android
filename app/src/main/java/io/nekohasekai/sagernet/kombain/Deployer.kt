@@ -400,7 +400,18 @@ object Deployer {
                 emit("── Резервная копия от " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale("ru")).format(java.util.Date(old.backupAt)))
             }
             emit("── Ставлю на ${target.host}")
-            val r = ssh(target).run(listOf("import", "--host", target.host.trim(), "--data", data))
+            var r = ssh(target).run(listOf("import", "--host", target.host.trim(), "--data", data))
+            if (!r.ok && r.error.orEmpty().contains("уже стоит DAK")) {
+                // the hoster gave the same VPS a new address: DAK is already there with our keys — only the links change
+                val r1 = ssh(target).run(listOf("links"))
+                if (r1.ok && r1.json != null && sameServer(old, r1.json)) {
+                    emit("── Это тот же сервер с новым адресом — меняю только адрес в ссылках")
+                    r = ssh(target).run(listOf("set-host", "--host", target.host.trim()))
+                } else {
+                    return@runOnDefaultDispatcher finish(false, "На ${target.host} уже стоит другой DAK, не этот сервер. " +
+                        "Переезд затёр бы его — выберите чистый VPS или удалите DAK с него («Удалить DAK с сервера»).")
+                }
+            }
             if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "переезд не удался")
             old.host = target.host.trim(); old.sshPort = target.sshPort; old.user = target.user
             old.password = target.password; old.privateKey = target.privateKey; old.hostKey = target.hostKey
@@ -415,6 +426,26 @@ object Deployer {
             finish(true, "Переезд завершён, профили обновлены ($n)." +
                 (if (AltSub.enabled) " Устройства с подпиской найдут новый адрес сами." else " Другим устройствам отправьте новые подписки («Пользователи»).") +
                 " Старый VPS не тронут — удалите его у хостера, когда убедитесь, что всё работает.")
+        }
+    }
+
+    /** Same DAK installation? The subscription tokens of its users don't change with the address. */
+    private fun sameServer(old: ServerNode, json: JSONObject): Boolean {
+        fun tokens(urls: List<String>) = urls.map { it.substringBefore('#').substringBefore('?').substringAfterLast('/') }
+            .filter { it.length >= 16 }.toSet()
+        val subs = json.optJSONArray("subs") ?: return false
+        val theirs = tokens((0 until subs.length()).map { subs.getJSONObject(it).optString("url") })
+        val group = runCatching { io.nekohasekai.sagernet.database.SagerDatabase.groupDao.getById(old.groupId) }.getOrNull()
+        val ours = tokens(listOfNotNull(group?.subscription?.link))
+        if (ours.isNotEmpty() && theirs.any { it in ours }) return true
+        // no subscription on this device: the users' ids are the same on the same server
+        val links = json.optJSONArray("links") ?: return false
+        val ids = (0 until links.length()).mapNotNull {
+            links.getJSONObject(it).optString("link").substringAfter("://").substringBefore('@').takeIf { id -> id.length == 36 }
+        }.toSet()
+        val profiles = runCatching { io.nekohasekai.sagernet.database.SagerDatabase.proxyDao.getByGroup(old.groupId) }.getOrNull().orEmpty()
+        return profiles.any { p ->
+            (p.requireBean() as? io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean)?.uuid in ids
         }
     }
 

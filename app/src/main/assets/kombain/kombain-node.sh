@@ -47,6 +47,8 @@
 #   kombain-node.sh new-ipv6                    another address from the server's /64: a blocked IPv6 address is
 #                                               replaced in seconds, the profiles follow through the subscription
 #   kombain-node.sh disable-ipv6
+#   kombain-node.sh set-host --host IP      the same server got a new address from the hoster: only the
+#                                           links change (keys, users, ports stay)
 #   kombain-node.sh uninstall
 #
 # With KB_WITH_EXPORT=1 every command that prints KB_RESULT also prints KB_EXPORT.
@@ -1957,6 +1959,24 @@ cmd_disable_ipv6() {
   print_result
 }
 
+cmd_set_host() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local h=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --host) h=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  [ -n "$h" ] || die "укажите --host"
+  step "Адрес сервера: $HOST → $h (ключи, пользователи и порты прежние)"
+  HOST=$h
+  save_state
+  render_all; restart_services
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   [ -f "$KB_DIR/hop.sh" ] && sh "$KB_DIR/hop.sh" down >/dev/null 2>&1
@@ -2008,6 +2028,7 @@ case ${1-} in
   enable-cdn) shift; cmd_enable_cdn "$@" ;;
   disable-cdn) cmd_disable_cdn ;;
   enable-ipv6) shift; cmd_enable_ipv6 "$@" ;;
+  set-host) shift; cmd_set_host "$@" ;;
   new-ipv6) cmd_new_ipv6 ;;
   disable-ipv6) cmd_disable_ipv6 ;;
   export) cmd_export ;;
