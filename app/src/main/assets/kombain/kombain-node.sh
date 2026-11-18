@@ -43,6 +43,10 @@
 #                             clients connect to NAME through the CDN — blocking the server's IP doesn't matter.
 #                             VLESS Encryption keeps the CDN from reading the traffic.
 #   kombain-node.sh disable-cdn
+#   kombain-node.sh enable-ipv6 [--addr IPV6]   IPv6 profiles next to the IPv4 ones (the server's own IPv6)
+#   kombain-node.sh new-ipv6                    another address from the server's /64: a blocked IPv6 address is
+#                                               replaced in seconds, the profiles follow through the subscription
+#   kombain-node.sh disable-ipv6
 #   kombain-node.sh uninstall
 #
 # With KB_WITH_EXPORT=1 every command that prints KB_RESULT also prints KB_EXPORT.
@@ -106,12 +110,13 @@ load_state() {
   SD_PORT=${SD_PORT:-8880}; SD_PUB=${SD_PUB:-}; SD_MPRIV=${SD_MPRIV:-}
   DOMAIN=${DOMAIN:-}; NV_PORT=${NV_PORT:-0}; AT_PORT=${AT_PORT:-0}
   CDN_HOST=${CDN_HOST:-}; CDN_PORT=${CDN_PORT:-0}; CDN_PATH=${CDN_PATH:-}
+  HOST6=${HOST6:-}; HOST6_ADDED=${HOST6_ADDED:-}
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV DOMAIN NV_PORT AT_PORT CDN_HOST CDN_PORT CDN_PATH NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV DOMAIN NV_PORT AT_PORT CDN_HOST CDN_PORT CDN_PATH HOST6 HOST6_ADDED NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -137,6 +142,12 @@ detect_arch() {
     armv7l) XRAY_ARCH=arm32-v7a; HY_ARCH=arm; SB_ARCH=armv7; MTG_ARCH=armv7 ;;
     *) die "неподдерживаемая архитектура $(uname -m)" ;;
   esac
+}
+
+install_pkg() {
+  if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
+  elif command -v dnf >/dev/null; then dnf install -y -q "$@"
+  elif command -v yum >/dev/null; then yum install -y -q "$@"; fi
 }
 
 install_packages() {
@@ -391,6 +402,9 @@ parse_exit_link() { # vless://uuid@host:port?query#name
   [ -n "$EXIT_UUID" ] && [ -n "$EXIT_PBK" ] && [ -n "$EXIT_SNI" ] || die "в ссылке выходной ноды не хватает данных Reality"
 }
 
+# both IPv4 and IPv6 once IPv6 is on; plain IPv4 otherwise (a kernel without IPv6 can't bind "::")
+listen_all() { [ -n "${HOST6:-}" ] && echo "::" || echo "0.0.0.0"; }
+
 json_clients() { # $1 = flow ("" for XHTTP)
   local first=1 flow=${1-}
   while IFS='|' read -r name uuid _; do
@@ -414,20 +428,20 @@ render_xray() {
     "${KB_REALITY_TARGET:-${DEST:-$SNI:443}}" "$names" "$PRIV" "$SID")
   local sniff='"sniffing":{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":true}'
   # the main VLESS inbound always exists: entry nodes and the bridge use it
-  vless_in=$(printf '{"tag":"vless-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"none"},"streamSettings":{"network":"raw",%s},%s}' \
-    "$PORT" "$(json_clients xtls-rprx-vision)" "$reality" "$sniff")
+  vless_in=$(printf '{"tag":"vless-in","listen":"%s","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"none"},"streamSettings":{"network":"raw",%s},%s}' \
+    "$(listen_all)" "$PORT" "$(json_clients xtls-rprx-vision)" "$reality" "$sniff")
   if has_proto xhttp; then
     # «против заморозки»: VLESS Encryption + Vision inside XHTTP (the client also uses stream-one and XMUX)
     local xh_flow="" xh_dec=none
     if [ "${ANTIFREEZE:-0}" = 1 ] && [ -n "$XH_DEC" ]; then xh_flow=xtls-rprx-vision; xh_dec=$XH_DEC; fi
-    xh_in=$(printf ',{"tag":"xhttp-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
-      "$XH_PORT" "$(json_clients "$xh_flow")" "$xh_dec" "$XH_PATH" "$reality" "$sniff")
+    xh_in=$(printf ',{"tag":"xhttp-in","listen":"%s","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
+      "$(listen_all)" "$XH_PORT" "$(json_clients "$xh_flow")" "$xh_dec" "$XH_PATH" "$reality" "$sniff")
   fi
   local cdn_in=""
   if has_proto cdn && [ -n "$CDN_PATH" ]; then
     # for a CDN: plain HTTP to the origin port, VLESS Encryption keeps the CDN from reading the traffic
-    cdn_in=$(printf ',{"tag":"cdn-in","listen":"0.0.0.0","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"packet-up"},"security":"none"},%s}' \
-      "$CDN_PORT" "$(json_clients "")" "${XH_DEC:-none}" "$CDN_PATH" "$sniff")
+    cdn_in=$(printf ',{"tag":"cdn-in","listen":"%s","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"packet-up"},"security":"none"},%s}' \
+      "$(listen_all)" "$CDN_PORT" "$(json_clients "")" "${XH_DEC:-none}" "$CDN_PATH" "$sniff")
   fi
   if has_proto hy2 || has_proto tuic || has_proto tg || has_proto naive || has_proto anytls; then
     socks_in=',{"tag":"hy-in","listen":"127.0.0.1","port":'"$KB_SOCKS_PORT"',"protocol":"socks","settings":{"udp":true}}'
@@ -724,7 +738,7 @@ render_mtg() {
   [ "$ROLE" = entry ] && proxies="\"socks5://127.0.0.1:$KB_SOCKS_PORT\""
   cat > "$KB_DIR/mtg.toml" <<EOF
 secret = "$TG_SECRET"
-bind-to = "0.0.0.0:$TG_PORT"
+bind-to = "$( [ -n "${HOST6:-}" ] && echo "[::]" || echo 0.0.0.0 ):$TG_PORT"
 prefer-ip = "prefer-ipv4"
 
 [network]
@@ -928,6 +942,18 @@ enable_bbr() {
 host_for_link() { [[ $HOST == *:* ]] && echo "[$HOST]" || echo "$HOST"; }
 
 user_links() { # name uuid hypass index -> "proto link" lines
+  user_links_v4 "$@"
+  if [ -n "${HOST6:-}" ]; then
+    # the IPv6 twins: "vless6", "xhttp6", … with « · IPv6» in the name
+    local saved=$HOST
+    HOST=$HOST6
+    user_links_v4 "$@" | awk '$1 ~ /^(vless|xhttp|tuic|hy2)$/ {sub(/ /, "6 "); print}' | sed 's/\(#.*\)$/\1%20%C2%B7%20IPv6/'
+    HOST=$saved
+  fi
+  return 0
+}
+
+user_links_v4() {
   local name=$1 uuid=$2 hypass=$3 i=$4 h label alts=""
   h=$(host_for_link)
   # kbsni: other names of the masking site (Kombain spreads connections over them; other apps ignore it)
@@ -996,10 +1022,10 @@ print_result() {
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
-  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s","sdPort":%s,"domain":"%s","nvPort":%s,"atPort":%s,"cdnHost":"%s","cdnPort":%s,"ip":"%s"}' \
+  local info; info=$(printf '{"name":"%s","protocols":"%s","sni":"%s","dest":"%s","port":%s,"xhPort":%s,"hyPort":%s,"tuicPort":%s,"tgPort":%s,"subPort":%s,"autoPorts":%s,"fp":"%s","antifreeze":%s,"sniRotation":%s,"sniAlts":"%s","hyHop":"%s","sdPort":%s,"domain":"%s","nvPort":%s,"atPort":%s,"cdnHost":"%s","cdnPort":%s,"ip":"%s","ip6":"%s"}' \
     "$(json_str "$NAME")" "$PROTOCOLS" "$SNI" "$DEST" "$PORT" "$XH_PORT" "$HY_PORT" "$TUIC_PORT" "$TG_PORT" "${SUB_PORT:-0}" "${AUTO_PORTS:-0}" \
     "$FP" "${ANTIFREEZE:-0}" "${SNI_ROT:-0}" "${SNI_ALTS:-}" "${HY_HOP:-}" "$SD_PORT" \
-    "${DOMAIN:-}" "${NV_PORT:-0}" "${AT_PORT:-0}" "${CDN_HOST:-}" "${CDN_PORT:-0}" "$HOST")
+    "${DOMAIN:-}" "${NV_PORT:-0}" "${AT_PORT:-0}" "${CDN_HOST:-}" "${CDN_PORT:-0}" "$HOST" "${HOST6:-}")
   local json; json=$(printf '{"role":"%s","links":[%s],"bridge":"%s","telegram":"%s","subs":[%s],"info":%s}' "$ROLE" "$links" "$bridge" "$tg" "$subs" "$info")
   echo "KB_RESULT $(printf '%s' "$json" | base64 | tr -d '\n')"
   [ "${KB_WITH_EXPORT:-0}" = 1 ] && emit_export
@@ -1819,13 +1845,127 @@ cmd_disable_cdn() {
   print_result
 }
 
+# ---- IPv6
+
+ip6_iface() { { ip -6 route show default 2>/dev/null || true; } | awk '{for (i=1;i<NF;i++) if ($i=="dev") {print $(i+1); exit}}'; }
+
+ip6_global() { # the server's global IPv6 addresses (no temporary/deprecated ones)
+  { ip -6 addr show scope global 2>/dev/null || true; } | awk '/inet6/ && !/temporary|deprecated|tentative/ {sub(/\/.*/, "", $2); print $2}'
+}
+
+ip6_works() { # address -> does the internet answer when it is the source?
+  [ "$KB_TEST" = 1 ] && return 0
+  local got
+  got=$(curl -6 -fsS --max-time 8 --interface "$1" https://api64.ipify.org 2>/dev/null || true)
+  # an IPv6 answer means packets from this source address go out and come back
+  case $got in *:*) return 0 ;; esac
+  return 1
+}
+
+# the address added by new-ipv6 has to come back after a reboot
+ip6_unit() {
+  [ "$KB_SYSTEMD" = 1 ] || return 0
+  if [ -n "${HOST6_ADDED:-}" ]; then
+    local dev; dev=$(ip6_iface)
+    printf '%s\n' "[Unit]" "Description=DAK: extra IPv6 address" "After=network-online.target" "Wants=network-online.target" \
+      "[Service]" "Type=oneshot" "RemainAfterExit=yes" \
+      "ExecStart=/bin/sh -c 'ip -6 addr add $HOST6_ADDED/64 dev $dev 2>/dev/null || true'" \
+      "ExecStop=/bin/sh -c 'ip -6 addr del $HOST6_ADDED/64 dev $dev 2>/dev/null || true'" \
+      "[Install]" "WantedBy=multi-user.target" > /etc/systemd/system/kombain-ip6.service
+    systemctl daemon-reload
+    systemctl enable kombain-ip6 >/dev/null 2>&1 || true
+  else
+    systemctl disable kombain-ip6 >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-ip6.service
+    systemctl daemon-reload
+  fi
+}
+
+ip6_drop_added() {
+  [ -n "${HOST6_ADDED:-}" ] || return 0
+  local dev; dev=$(ip6_iface)
+  [ "$KB_TEST" = 1 ] || ip -6 addr del "$HOST6_ADDED/64" dev "$dev" 2>/dev/null || true
+  HOST6_ADDED=""
+}
+
+cmd_enable_ipv6() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  local a=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --addr) a=$2; shift 2 ;;
+      *) die "неизвестный параметр $1" ;;
+    esac
+  done
+  if [ -z "$a" ]; then
+    a=$(ip6_global | head -1 || true)
+    [ -n "$a" ] || die "у сервера нет IPv6-адреса — включите IPv6 в панели хостера (обычно бесплатно) и повторите"
+  fi
+  ip6_works "$a" || die "IPv6 $a есть, но интернет через него не отвечает — проверьте настройки IPv6 у хостера"
+  HOST6=$a
+  save_state
+  render_all; open_firewall; restart_services
+  step "IPv6: $HOST6 — у каждого протокола появился профиль «IPv6»"
+  print_result
+}
+
+cmd_new_ipv6() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  [ -n "${HOST6:-}" ] || die "сначала включите IPv6"
+  local base dev cand i
+  base=$(ip6_global | { grep -vx "${HOST6_ADDED:-x}" || true; } | head -1)
+  [ -n "$base" ] || base=$HOST6
+  dev=$(ip6_iface)
+  [ -n "$dev" ] || [ "$KB_TEST" = 1 ] || die "не нашёл сетевой интерфейс с IPv6"
+  # the first 64 bits are the server's network (/64), the other 64 are free to pick
+  command -v python3 >/dev/null || { install_pkg python3 >/dev/null 2>&1 || true; }
+  command -v python3 >/dev/null || die "нужен python3 — установите его на сервер (apt install python3)"
+  local prefix
+  prefix=$(python3 -c 'import ipaddress,sys;print(ipaddress.IPv6Network(sys.argv[1]+"/64",strict=False).network_address)' "$base" 2>/dev/null) \
+    || die "не удалось разобрать адрес $base"
+  for i in 1 2 3; do
+    cand=$(python3 -c 'import ipaddress,sys,secrets;n=ipaddress.IPv6Network(sys.argv[1]+"/64");print(ipaddress.IPv6Address(int(n.network_address)|secrets.randbits(64)|1))' "$prefix")
+    step "Пробую новый IPv6: $cand"
+    if [ "$KB_TEST" != 1 ]; then
+      ip -6 addr add "$cand/64" dev "$dev" || continue
+      sleep 3  # duplicate address detection
+    fi
+    if ip6_works "$cand"; then
+      ip6_drop_added
+      HOST6_ADDED=$cand; HOST6=$cand
+      save_state; ip6_unit
+      render_all; restart_services
+      step "Новый IPv6: $HOST6 — устройства с подпиской получат его сами"
+      print_result
+      return 0
+    fi
+    [ "$KB_TEST" = 1 ] || ip -6 addr del "$cand/64" dev "$dev" 2>/dev/null || true
+  done
+  die "хостер не пускает в интернет другие адреса из /64 этого сервера (бывает, когда выдан один адрес /128) — попросите у хостера подсеть /64"
+}
+
+cmd_disable_ipv6() {
+  load_state
+  [ "$KB_SYSTEMD" = 1 ] && need_root
+  ip6_drop_added
+  HOST6=""
+  save_state; ip6_unit
+  render_all; restart_services
+  step "Профили IPv6 выключены"
+  print_result
+}
+
 cmd_uninstall() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   [ -f "$KB_DIR/hop.sh" ] && sh "$KB_DIR/hop.sh" down >/dev/null 2>&1
+  [ -f "$(state_file)" ] && { . "$(state_file)" 2>/dev/null || true; HOST6_ADDED=${HOST6_ADDED:-}; ip6_drop_added 2>/dev/null || true; }
   if [ "$KB_SYSTEMD" = 1 ]; then
     systemctl disable --now kombain-hop >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/kombain-hop.service
-    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-sudoku kombain-mtg kombain-sub kombain-tls kombain-cert.timer kombain-ports.timer >/dev/null 2>&1 || true
+    systemctl disable --now kombain-xray kombain-hysteria kombain-tuic kombain-sudoku kombain-mtg kombain-sub kombain-tls kombain-cert.timer kombain-ports.timer kombain-ip6 >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/kombain-ip6.service
     rm -f /etc/systemd/system/kombain-tls.service /etc/systemd/system/kombain-cert.service /etc/systemd/system/kombain-cert.timer
     rm -f /etc/systemd/system/kombain-sudoku.service
     rm -f /etc/systemd/system/kombain-ports.timer /etc/systemd/system/kombain-ports.service
@@ -1867,8 +2007,11 @@ case ${1-} in
   disable-domain) cmd_disable_domain ;;
   enable-cdn) shift; cmd_enable_cdn "$@" ;;
   disable-cdn) cmd_disable_cdn ;;
+  enable-ipv6) shift; cmd_enable_ipv6 "$@" ;;
+  new-ipv6) cmd_new_ipv6 ;;
+  disable-ipv6) cmd_disable_ipv6 ;;
   export) cmd_export ;;
   import) shift; cmd_import "$@" ;;
   uninstall) cmd_uninstall ;;
-  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | set-domain | disable-domain | enable-cdn | disable-cdn | export | import | uninstall" ;;
+  *) die "команды: install | add-user NAME | remove-user NAME | links | status | stats | rotate | set-exit | enable-telegram | disable-telegram | enable-sudoku | disable-sudoku | find-sni | set-sni | ensure-sub | shuffle-ports | auto-ports | harden | set-domain | disable-domain | enable-cdn | disable-cdn | enable-ipv6 | new-ipv6 | disable-ipv6 | export | import | uninstall" ;;
 esac

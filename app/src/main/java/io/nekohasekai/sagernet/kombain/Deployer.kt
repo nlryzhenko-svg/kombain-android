@@ -102,6 +102,7 @@ object Deployer {
             node.domain = i.optString("domain"); node.nvPort = i.optInt("nvPort"); node.atPort = i.optInt("atPort")
             node.cdnHost = i.optString("cdnHost"); node.cdnPort = i.optInt("cdnPort")
         }
+        if (i.has("ip6")) node.host6 = i.optString("ip6")
         if (i.has("fp")) {
             node.fp = i.optString("fp", node.fp)
             node.antifreeze = i.optInt("antifreeze") == 1
@@ -453,6 +454,30 @@ object Deployer {
             val n = importLinks(node, groupName(node), r.json, replace = true)
             ServerStore.upsert(node)
             finish(true, "Sudoku работает, профили обновлены ($n). Устройства с подпиской получат его сами.")
+        }
+    }
+
+    /** IPv6 twins of the profiles; [rotate] = another address from the server's /64. */
+    fun ipv6(node: ServerNode, action: String) {
+        val title = when (action) {
+            "new" -> "Новый IPv6-адрес для ${node.name}"
+            "off" -> "Выключаю IPv6 на ${node.name}"
+            else -> "IPv6 для ${node.name}"
+        }
+        if (!start(title)) return
+        runOnDefaultDispatcher {
+            val cmd = when (action) { "new" -> "new-ipv6"; "off" -> "disable-ipv6"; else -> "enable-ipv6" }
+            val r = ssh(node).run(listOf(cmd))
+            if (!r.ok || r.json == null) return@runOnDefaultDispatcher finish(false, r.error ?: "не получилось")
+            syncInfo(node, r.json)
+            val n = importLinks(node, groupName(node), r.json, replace = true)
+            ServerStore.upsert(node)
+            finish(true, when (action) {
+                "off" -> "Профили IPv6 убраны, профили обновлены ($n)."
+                "new" -> "Сервер теперь на ${node.host6}, профили обновлены ($n). Устройства с подпиской получат адрес сами."
+                else -> "IPv6 ${node.host6} включён: у каждого протокола есть профиль «IPv6» ($n профилей). " +
+                    "Он работает там, где у телефона есть IPv6 (у тебя — мобильный интернет); сторож сам переключит, если нет."
+            })
         }
     }
 

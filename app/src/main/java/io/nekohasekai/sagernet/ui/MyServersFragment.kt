@@ -335,6 +335,7 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
             if (s.role == "single") 9 to getString(if (s.hasSudoku) R.string.srv_m_sd_off else R.string.srv_m_sd_on) else null,
             if (s.role != "exit") 13 to (if (s.hasDomain) "Домен ${s.domain}: NaiveProxy и AnyTLS" else "Свой домен: NaiveProxy и AnyTLS…") else null,
             if (s.role != "exit") 14 to (if (s.hasCdn) "CDN ${s.cdnHost}" else "Подключение через CDN…") else null,
+            if (s.role != "exit") 15 to (if (s.host6.isNotBlank()) "IPv6: сменить адрес или выключить" else "Профили по IPv6…") else null,
             if (s.role == "single" && Deployer.entryOf(s) == null) 12 to getString(R.string.srv_m_attach) else null,
             10 to getString(R.string.srv_m_move),
             2 to getString(R.string.srv_m_uninstall), 3 to getString(R.string.srv_m_forget),
@@ -358,6 +359,25 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
                     13 -> if (Deployer.running) snackbar(R.string.srv_busy).show() else domainDialog(s)
 
                     14 -> if (Deployer.running) snackbar(R.string.srv_busy).show() else cdnDialog(s)
+
+                    15 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
+                    else if (s.host6.isBlank()) MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("Профили по IPv6")
+                        .setMessage("У каждого протокола появится второй профиль — к IPv6-адресу сервера. Правила ТСПУ пишут " +
+                            "прежде всего для IPv4, а IPv6-адрес сервер может сменить на соседний за секунды, если его заблокируют.\n\n" +
+                            "Работает там, где у телефона есть IPv6 (проверить: test-ipv6.com). Если у сервера нет IPv6 — " +
+                            "включите его в панели хостера.")
+                        .setPositiveButton("Включить") { _, _ -> Deployer.ipv6(s, "on"); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    else MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("IPv6: ${s.host6}")
+                        .setMessage("«Сменить адрес» — сервер возьмёт другой адрес из своей сети /64 (если старый заблокировали). " +
+                            "Телефоны с подпиской получат его сами.")
+                        .setPositiveButton("Сменить адрес") { _, _ -> Deployer.ipv6(s, "new"); scrollTop() }
+                        .setNeutralButton("Выключить") { _, _ -> Deployer.ipv6(s, "off"); scrollTop() }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
 
                     12 -> if (Deployer.running) snackbar(R.string.srv_busy).show()
                     else (activity as? MainActivity)?.displayFragment(ServerWizardFragment.attachTo(s))

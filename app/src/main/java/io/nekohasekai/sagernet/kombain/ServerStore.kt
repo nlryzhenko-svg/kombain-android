@@ -70,6 +70,8 @@ data class ServerNode(
     /** XHTTP through a CDN: the address clients use and the origin port the CDN fetches from */
     var cdnHost: String = "",
     var cdnPort: Int = 0,
+    /** the server's IPv6 address used in the «IPv6» profiles ("" = off) */
+    var host6: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("host", host); put("sshPort", sshPort); put("user", user)
@@ -80,7 +82,7 @@ data class ServerNode(
         put("sniAlts", sniAlts); put("hyHop", hyHop)
         put("backup", backup); put("backupAt", backupAt); put("altSecret", altSecret)
         put("hostKey", hostKey); put("groupId", groupId); put("installedAt", installedAt)
-        put("domain", domain); put("nvPort", nvPort); put("atPort", atPort); put("cdnHost", cdnHost); put("cdnPort", cdnPort)
+        put("domain", domain); put("nvPort", nvPort); put("atPort", atPort); put("cdnHost", cdnHost); put("cdnPort", cdnPort); put("host6", host6)
         put("stats", stats); put("statsAt", statsAt); put("health", health)
     }
 
@@ -102,7 +104,7 @@ data class ServerNode(
             hostKey = o.optString("hostKey"), groupId = o.optLong("groupId"), installedAt = o.optLong("installedAt"),
             stats = o.optString("stats"), statsAt = o.optLong("statsAt"), health = o.optString("health"),
             domain = o.optString("domain"), nvPort = o.optInt("nvPort"), atPort = o.optInt("atPort"),
-            cdnHost = o.optString("cdnHost"), cdnPort = o.optInt("cdnPort"),
+            cdnHost = o.optString("cdnHost"), cdnPort = o.optInt("cdnPort"), host6 = o.optString("host6"),
         )
     }
 
