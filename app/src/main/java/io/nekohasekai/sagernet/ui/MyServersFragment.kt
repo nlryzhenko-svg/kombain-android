@@ -489,28 +489,42 @@ class MyServersFragment : ToolbarFragment(R.layout.layout_my_servers) {
 
     private fun askPorts(s: ServerNode) {
         val ctx = requireContext()
-        val protos = s.protocols.split(',').toMutableList().apply { if ("vless" !in this) add(0, "vless") }
         val current = mapOf("vless" to s.vpnPort, "xhttp" to s.xhPort, "hy2" to s.hyPort, "tuic" to s.tuicPort, "tg" to s.tgPort, "sudoku" to s.sdPort)
+        // only the protocols whose port can be changed here (NaiveProxy/AnyTLS/CDN have their own settings)
+        val protos = s.protocols.split(',').filter { it in current }.toMutableList().apply { if ("vless" !in this) add(0, "vless") }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp2px(22), dp2px(4), dp2px(22), 0)
+            setPadding(dp2px(22), dp2px(8), dp2px(22), dp2px(4))
         }
-        val fields = protos.associateWith { p ->
+        box.addView(android.widget.TextView(ctx).apply {
+            setText(R.string.srv_ports_msg)
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+        })
+        // two fields per row: with every protocol on, the buttons stay on screen
+        var row: LinearLayout? = null
+        val fields = protos.withIndex().associate { (i, p) ->
+            if (i % 2 == 0) {
+                row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+                box.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp2px(6) })
+            }
             val til = com.google.android.material.textfield.TextInputLayout(ctx).apply {
-                hint = protoName(p) + if (p == "hy2" || p == "tuic") " (UDP)" else " (TCP)"
+                hint = protoName(p) + if (p == "hy2" || p == "tuic") " · UDP" else " · TCP"
             }
             val et = com.google.android.material.textfield.TextInputEditText(til.context).apply {
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER
-                setText(current[p].toString())
+                setText((current[p] ?: 0).toString())
             }
             til.addView(et)
-            box.addView(til, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp2px(6) })
-            et
+            row!!.addView(til, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                if (i % 2 == 0) marginEnd = dp2px(6) else marginStart = dp2px(6)
+            })
+            p to et
         }
+        if (protos.size % 2 == 1) row?.addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+        val scroll = androidx.core.widget.NestedScrollView(ctx).apply { addView(box) }
         MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.srv_m_ports)
-            .setMessage(R.string.srv_ports_msg)
-            .setView(box)
+            .setView(scroll)
             .setPositiveButton(R.string.srv_rotate_yes) { _, _ ->
                 val ports = fields.mapValues { it.value.text.toString().toIntOrNull() ?: 0 }
                     .filter { it.value in 1..65535 }

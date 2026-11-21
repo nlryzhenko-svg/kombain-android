@@ -68,6 +68,7 @@ object Watchdog {
         while (recoveries.isNotEmpty() && now - recoveries.first() > 10 * 60_000) recoveries.removeFirst()
         delay(if (recoveries.size >= 3) 120_000 else GRACE)
 
+        refreshOwnPorts(service)?.let { return }
         var fails = 0
         var remembered = false
         var net = NetMemory.current()
@@ -124,6 +125,33 @@ object Watchdog {
             }
             delay(RETRY)
         }
+    }
+
+    /**
+     * The own server changes its ports on a timer (at night): the profile may be a day old. Fetch the
+     * subscription (directly, not through the tunnel) and reconnect when the current profile moved.
+     */
+    private suspend fun refreshOwnPorts(service: BaseService.Interface): Unit? {
+        val id = DataStore.currentProfile.takeIf { it > 0 } ?: DataStore.selectedProxy
+        val p = SagerDatabase.proxyDao.getById(id) ?: return null
+        val group = SagerDatabase.groupDao.getById(p.groupId) ?: return null
+        val sub = group.subscription ?: return null
+        if (!sub.link.orEmpty().contains("#kbpin=")) return null
+        val node = io.nekohasekai.sagernet.kombain.ServerStore.all().firstOrNull { it.groupId == group.id }
+        if ((node?.autoPorts ?: 0) <= 0) return null
+        if (System.currentTimeMillis() / 1000 - (sub.lastUpdated ?: 0) < 2 * 3600) return null
+        val before = runCatching { p.requireBean().serverPort }.getOrNull()
+        log("проверяю, не сменил ли сервер порты")
+        runCatching { io.nekohasekai.sagernet.group.GroupUpdater.executeUpdate(group, false) }.onFailure { Logs.w(it); return null }
+        val after = SagerDatabase.proxyDao.getById(id)?.let { runCatching { it.requireBean().serverPort }.getOrNull() }
+        if (after == null || after == before) return null
+        val text = "Сервер сменил порты — переподключаюсь"
+        log(text)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(app, text, Toast.LENGTH_SHORT).show()
+            if (service.data.state == BaseService.State.Connected) service.stopRunner(true)
+        }
+        return Unit
     }
 
     private var lastBigProbe = 0L

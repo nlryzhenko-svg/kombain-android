@@ -113,12 +113,16 @@ load_state() {
   DOMAIN=${DOMAIN:-}; NV_PORT=${NV_PORT:-0}; AT_PORT=${AT_PORT:-0}
   CDN_HOST=${CDN_HOST:-}; CDN_PORT=${CDN_PORT:-0}; CDN_PATH=${CDN_PATH:-}
   HOST6=${HOST6:-}; HOST6_ADDED=${HOST6_ADDED:-}
+  # servers that got their bridge before it had a port of its own keep it on the VLESS port
+  BRIDGE_PORT=${BRIDGE_PORT:-}
+  [ -n "${BRIDGE_UUID-}" ] && [ -z "$BRIDGE_PORT" ] && BRIDGE_PORT=$PORT
+  return 0
 }
 
 save_state() {
   mkdir -p "$KB_DIR"; chmod 700 "$KB_DIR"
   {
-    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV DOMAIN NV_PORT AT_PORT CDN_HOST CDN_PORT CDN_PATH HOST6 HOST6_ADDED NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
+    for v in ROLE HOST PROTOCOLS SNI PORT XH_PORT XH_PATH HY_PORT TUIC_PORT TG_PORT TG_SECRET DEST SUB_PORT AUTO_PORTS FP ANTIFREEZE XH_DEC XH_ENC SNI_ROT SNI_ALTS HY_HOP SD_PORT SD_PUB SD_MPRIV DOMAIN NV_PORT AT_PORT CDN_HOST CDN_PORT CDN_PATH HOST6 HOST6_ADDED BRIDGE_PORT NAME PRIV PUB SID HY_OBFS BRIDGE_UUID \
              EXIT_ADDR EXIT_PORT EXIT_UUID EXIT_FLOW EXIT_SNI EXIT_PBK EXIT_SID EXIT_FP; do
       printf "%s=%q\n" "$v" "${!v-}"
     done
@@ -415,7 +419,7 @@ json_clients() { # $1 = flow ("" for XHTTP)
     first=0
     printf '{"id":"%s","flow":"%s","email":"%s"}' "$uuid" "$flow" "$(echo "$name" | sed 's/["\\]//g')"
   done < "$(users_file)"
-  if [ -n "${BRIDGE_UUID-}" ]; then
+  if [ -n "${BRIDGE_UUID-}" ] && [ "${BRIDGE_PORT:-$PORT}" = "$PORT" ] && [ "${2-}" != nobridge ]; then
     [ $first = 1 ] || printf ','
     printf '{"id":"%s","flow":"%s","email":"kombain-bridge"}' "$BRIDGE_UUID" "$flow"
   fi
@@ -438,6 +442,12 @@ render_xray() {
     if [ "${ANTIFREEZE:-0}" = 1 ] && [ -n "$XH_DEC" ]; then xh_flow=xtls-rprx-vision; xh_dec=$XH_DEC; fi
     xh_in=$(printf ',{"tag":"xhttp-in","listen":"%s","port":%s,"protocol":"vless","settings":{"clients":[%s],"decryption":"%s"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"%s","mode":"auto"},%s},%s}' \
       "$(listen_all)" "$XH_PORT" "$(json_clients "$xh_flow")" "$xh_dec" "$XH_PATH" "$reality" "$sniff")
+  fi
+  local bridge_in=""
+  if [ -n "${BRIDGE_UUID-}" ] && [ -n "${BRIDGE_PORT:-}" ] && [ "$BRIDGE_PORT" != "$PORT" ]; then
+    # the Russian entry reaches this server on a port of its own: the users' ports can change freely
+    bridge_in=$(printf ',{"tag":"bridge-in","listen":"%s","port":%s,"protocol":"vless","settings":{"clients":[{"id":"%s","flow":"xtls-rprx-vision","email":"kombain-bridge"}],"decryption":"none"},"streamSettings":{"network":"raw",%s},%s}' \
+      "$(listen_all)" "$BRIDGE_PORT" "$BRIDGE_UUID" "$reality" "$sniff")
   fi
   local cdn_in=""
   if has_proto cdn && [ -n "$CDN_PATH" ]; then
@@ -467,7 +477,7 @@ render_xray() {
   "stats": {},
   "policy": {"levels": {"0": {"statsUserUplink": true, "statsUserDownlink": true}},
              "system": {"statsInboundUplink": true, "statsInboundDownlink": true}},
-  "inbounds": [$vless_in$xh_in$cdn_in$socks_in],
+  "inbounds": [$vless_in$bridge_in$xh_in$cdn_in$socks_in],
   "outbounds": [{"tag": "direct", "protocol": "freedom"$freedom_settings}, {"tag": "block", "protocol": "blackhole"}$extra_out],
   "routing": {"domainStrategy": "$strategy", "rules": [
     ${ru_rules}
@@ -891,6 +901,7 @@ open_firewall() {
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
     step "Открываю порты в ufw"
     ufw allow "$PORT/tcp" >/dev/null
+    [ -n "${BRIDGE_PORT:-}" ] && ufw allow "$BRIDGE_PORT/tcp" >/dev/null
     has_proto xhttp && ufw allow "$XH_PORT/tcp" >/dev/null
     has_proto hy2 && ufw allow "$HY_PORT/udp" >/dev/null
     has_proto hy2 && [ -n "${HY_HOP:-}" ] && ufw allow "${HY_HOP/-/:}/udp" >/dev/null
@@ -905,6 +916,7 @@ open_firewall() {
   elif command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
     step "Открываю порты в firewalld"
     firewall-cmd -q --permanent --add-port="$PORT/tcp"
+    [ -n "${BRIDGE_PORT:-}" ] && firewall-cmd -q --permanent --add-port="$BRIDGE_PORT/tcp"
     has_proto xhttp && firewall-cmd -q --permanent --add-port="$XH_PORT/tcp"
     has_proto hy2 && firewall-cmd -q --permanent --add-port="$HY_PORT/udp"
     has_proto hy2 && [ -n "${HY_HOP:-}" ] && firewall-cmd -q --permanent --add-port="$HY_HOP/udp"
@@ -1020,7 +1032,7 @@ print_result() {
   done < "$(users_file)"
   local bridge=""
   if [ -n "${BRIDGE_UUID-}" ]; then
-    bridge="vless://$BRIDGE_UUID@$h:$PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=$FP&pbk=$PUB&sid=$SID&type=tcp#bridge"
+    bridge="vless://$BRIDGE_UUID@$h:${BRIDGE_PORT:-$PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=$FP&pbk=$PUB&sid=$SID&type=tcp#bridge"
   fi
   local tg=""
   if has_proto tg && [ -n "$TG_SECRET" ]; then tg="tg://proxy?server=$HOST&port=$TG_PORT&secret=$TG_SECRET"; fi
@@ -1238,9 +1250,15 @@ cmd_stats() {
   a=$(awk '/^cpu / {t=0; for (i=2;i<=NF;i++) t+=$i; print t, $9}' /proc/stat); sleep 1
   b=$(awk '/^cpu / {t=0; for (i=2;i<=NF;i++) t+=$i; print t, $9}' /proc/stat)
   steal=$(awk -v a="$a" -v b="$b" 'BEGIN {split(a,x," "); split(b,y," "); d=y[1]-x[1]; if (d > 0) printf "%d", (y[2]-x[2])*100/d; else print 0}')
+  # the last automatic port change: when, and its error if it failed
+  local ports_at=0 ports_err=""
+  if [ -f "$KB_DIR/ports.log" ]; then
+    ports_at=$(stat -c %Y "$KB_DIR/ports.log" 2>/dev/null || echo 0)
+    ports_err=$(grep '^KB_ERROR' "$KB_DIR/ports.log" | tail -1 | cut -c10- | tr -d '"\\' | cut -c1-200 || true)
+  fi
   local json
-  json=$(printf '{"uptime":%s,"load":"%s","memTotalKb":%s,"memAvailKb":%s,"diskPct":%s,"rx":%s,"tx":%s,"role":"%s","protocols":"%s","services":[%s],"users":[%s],"restarts":%s,"oom":%s,"swapUsedKb":%s,"conntrack":%s,"conntrackMax":%s,"steal":%s,"cpus":%s,"xrayRssKb":%s,"exitIp":"%s","ownIp":"%s","exitAddr":"%s"}' \
-    "${up:-0}" "$load" "${mem_total:-0}" "${mem_avail:-0}" "${disk:-0}" "${rx:-0}" "${tx:-0}" "$ROLE" "$PROTOCOLS" "$svcs" "$users" \
+  json=$(printf '{"portsAt":%s,"portsErr":"%s","autoPorts":%s,"uptime":%s,"load":"%s","memTotalKb":%s,"memAvailKb":%s,"diskPct":%s,"rx":%s,"tx":%s,"role":"%s","protocols":"%s","services":[%s],"users":[%s],"restarts":%s,"oom":%s,"swapUsedKb":%s,"conntrack":%s,"conntrackMax":%s,"steal":%s,"cpus":%s,"xrayRssKb":%s,"exitIp":"%s","ownIp":"%s","exitAddr":"%s"}' \
+    "${ports_at:-0}" "$ports_err" "${AUTO_PORTS:-0}" "${up:-0}" "$load" "${mem_total:-0}" "${mem_avail:-0}" "${disk:-0}" "${rx:-0}" "${tx:-0}" "$ROLE" "$PROTOCOLS" "$svcs" "$users" \
     "${restarts:-0}" "${oom:-0}" "$(( ${swap_total:-0} - ${swap_free:-0} ))" "${ct:-0}" "${ct_max:-0}" "${steal:-0}" "${cpus:-1}" "${xray_rss:-0}" "$exit_ip" "$own_ip" "${EXIT_ADDR:-}")
   echo "KB_STATS $(printf '%s' "$json" | base64 | tr -d '\n')"
 }
@@ -1463,7 +1481,7 @@ busy_ports() {
 
 # a random free port 20000–59999 that no other Kombain service uses
 pick_port() {
-  local used=" $(busy_ports | tr '\n' ' ') $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT ${NV_PORT:-0} ${AT_PORT:-0} ${CDN_PORT:-0} 80 $* " p i
+  local used=" $(busy_ports | tr '\n' ' ') $TG_PORT ${SUB_PORT:-0} $KB_SOCKS_PORT $KB_API_PORT ${NV_PORT:-0} ${AT_PORT:-0} ${CDN_PORT:-0} ${BRIDGE_PORT:-0} 80 $* " p i
   for i in $(seq 1 200); do
     p=$((20000 + RANDOM % 40000))
     case $used in *" $p "*) continue ;; esac
@@ -1490,7 +1508,8 @@ cmd_shuffle_ports() {
   [ "$KB_SYSTEMD" = 1 ] && need_root
   # the exit node of a cascade is reached by its entry node: only the app can re-link them
   # the exit node of a cascade is reached by its entry node: only the app can re-link them (--relink)
-  [ -n "${BRIDGE_UUID-}" ] && [ "${1-}" != "--relink" ] && die "это выходной сервер каскада — меняйте его порты из приложения"
+  # a server with a Russian entry: the entry's link keeps its own port (BRIDGE_PORT), the users' ports change
+  [ -n "${BRIDGE_UUID-}" ] && [ -z "${BRIDGE_PORT:-}" ] && BRIDGE_PORT=$PORT
   local old=() new_vless new_xh="" new_hy="" new_tuic=""
   old+=("$PORT/tcp")
   new_vless=$(pick_port)
@@ -1541,10 +1560,7 @@ cmd_enable_bridge() {
   else
     step "Связь для входного сервера уже есть"
   fi
-  if [ "${AUTO_PORTS:-0}" != 0 ]; then
-    AUTO_PORTS=0; ports_timer 0
-    step "Автосмена портов выключена: входной сервер должен знать порт этого"
-  fi
+  [ -n "${BRIDGE_PORT:-}" ] || BRIDGE_PORT=$PORT
   save_state
   render_xray; render_sub
   if [ "$KB_SYSTEMD" = 1 ]; then
@@ -1566,7 +1582,8 @@ cmd_auto_ports() {
     esac
   done
   [[ $days =~ ^[0-9]+$ ]] || die "--every: число дней"
-  [ -n "${BRIDGE_UUID-}" ] && [ "$days" != 0 ] && die "на выходном сервере каскада автосмена портов недоступна"
+  # with a Russian entry the bridge stays on its own port, so the users' ports may change
+  [ -n "${BRIDGE_UUID-}" ] && [ -z "${BRIDGE_PORT:-}" ] && BRIDGE_PORT=$PORT
   AUTO_PORTS=$days
   save_state
   ports_timer "$days"
@@ -1588,7 +1605,7 @@ ports_timer() { # days (0 = off)
 Description=DAK: random new VPN ports
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env bash $KB_DIR/kombain-node.sh shuffle-ports
+ExecStart=/bin/sh -c '/usr/bin/env bash $KB_DIR/kombain-node.sh shuffle-ports > $KB_DIR/ports.log 2>&1'
 EOF
       cat > /etc/systemd/system/kombain-ports.timer <<EOF
 [Unit]

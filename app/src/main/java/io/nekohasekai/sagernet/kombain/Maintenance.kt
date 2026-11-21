@@ -38,7 +38,7 @@ object Maintenance {
 
     fun schedule() {
         val wm = RemoteWorkManager.getInstance(app)
-        val needed = (DataStore.kbWatchServers && ServerStore.all().isNotEmpty()) ||
+        val needed = ServerStore.all().isNotEmpty() ||
                 DataStore.kbAutoSubs || DataStore.kbAutoGeo || DataStore.kbAutoUpdate
         if (!needed) {
             wm.cancelUniqueWork(WORK_NAME)
@@ -106,11 +106,14 @@ object Maintenance {
 
     // ------------------------------------------------------------------ subscriptions
 
-    suspend fun updateSubscriptions() {
+    suspend fun updateSubscriptions(ownOnly: Boolean = false) {
         val now = System.currentTimeMillis() / 1000
         for (group in SagerDatabase.groupDao.subscriptions()) {
             val sub = group.subscription ?: continue
-            if (now - sub.lastUpdated < 20 * 3600) continue
+            // own servers change ports and keys on a timer: their subscriptions are refreshed every run (6 h)
+            val own = sub.link.orEmpty().contains("#kbpin=")
+            if (ownOnly && !own) continue
+            if (now - sub.lastUpdated < (if (own) 2 * 3600 else 20 * 3600)) continue
             runCatching { GroupUpdater.executeUpdate(group, false) }.onFailure { Logs.w(it) }
         }
     }
@@ -166,7 +169,8 @@ object Maintenance {
     class Task(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
         override suspend fun doWork(): Result {
             if (DataStore.kbWatchServers) runCatching { checkServers(applicationContext) }.onFailure { Logs.w(it) }
-            if (DataStore.kbAutoSubs) runCatching { updateSubscriptions() }.onFailure { Logs.w(it) }
+            // own servers' subscriptions follow the server even with «auto-update subscriptions» off
+            runCatching { updateSubscriptions(ownOnly = !DataStore.kbAutoSubs) }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoGeo) runCatching { updateGeo() }.onFailure { Logs.w(it) }
             if (Updater.due()) runCatching { notifyUpdate(applicationContext) }.onFailure { Logs.w(it) }
             if (DataStore.kbAutoGeo && BlockedLists.enabled &&

@@ -627,6 +627,18 @@ fun buildConfig(
                 port = subs.map { it.port }.distinct()
                 outbound = TAG_BYPASS
             })
+            // SSH to the own servers (checks, port changes, keys) goes directly too: through a dead tunnel the app
+            // would think the server is down
+            // (not for a server reached through a Russian entry: from Russia its own address may be blocked)
+            val nodes = io.nekohasekai.sagernet.kombain.ServerStore.all()
+            val behindEntry = nodes.filter { it.role == "entry" }.map { it.exitId }.toSet()
+            val ssh = nodes.filter { it.role != "exit" && it.id !in behindEntry }
+                .flatMap { n -> listOf(n.host.trim(), n.host6.trim()).filter { it.isIpAddress() }.map { it to n.sshPort } }
+            if (ssh.isNotEmpty()) route.rules.add(0, Rule_DefaultOptions().apply {
+                ip_cidr = ssh.map { (ip, _) -> if (ip.contains(':')) "$ip/128" else "$ip/32" }.distinct()
+                port = ssh.map { it.second }.distinct()
+                outbound = TAG_BYPASS
+            })
             // the reserve subscription copy (GitHub gist) is read directly too: the tunnel may be dead
             if (SagerDatabase.groupDao.allGroups().any { it.subscription?.link.orEmpty().contains("&kbalt=") }) route.rules.add(0, Rule_DefaultOptions().apply {
                 domain = listOf("gist.githubusercontent.com")

@@ -30,8 +30,25 @@ object ServerHealth {
         val total = st.optLong("memTotalKb"); val avail = st.optLong("memAvailKb")
         if (total > 0 && avail * 100 / total < 3) return "Почти нет свободной памяти"
         exitProblem(st)?.let { return it }
+        portsProblem(st)?.let { return it }
         return overload(st).firstOrNull().orEmpty()
     }
+
+    /** The server changes its ports on a timer: did the last run work, and does it run at all? */
+    fun portsProblem(st: JSONObject): String? {
+        val every = st.optInt("autoPorts")
+        if (every <= 0) return null
+        val err = st.optString("portsErr")
+        if (err.isNotBlank()) return "Автосмена портов не сработала: $err"
+        val at = st.optLong("portsAt")
+        if (at > 0 && System.currentTimeMillis() / 1000 - at > every * 86400L + 12 * 3600) {
+            return "Автосмена портов давно не срабатывала (последняя ${ago(at)})"
+        }
+        return null
+    }
+
+    private fun ago(epoch: Long): String =
+        java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale("ru")).format(java.util.Date(epoch * 1000))
 
     /** Entry node of a cascade: traffic must leave through the exit server. Null when fine or not an entry. */
     fun exitProblem(st: JSONObject): String? {
@@ -82,6 +99,14 @@ object ServerHealth {
         }
         add(summary(st))
         add("Диск занят на ${st.optInt("diskPct")}%")
+        if (st.optInt("autoPorts") > 0) {
+            val p = portsProblem(st)
+            add(when {
+                p != null -> "⚠ $p"
+                st.optLong("portsAt") > 0 -> "Автосмена портов раз в ${st.optInt("autoPorts")} дн.: последняя ${ago(st.optLong("portsAt"))}"
+                else -> "Автосмена портов раз в ${st.optInt("autoPorts")} дн.: ещё не срабатывала (около 4–6 утра по времени сервера)"
+            })
+        }
         if (st.optString("exitAddr").isNotBlank()) {
             val p = exitProblem(st)
             add(if (p == null) "Выход в интернет: через выходной сервер (IP ${st.optString("exitIp")}) — заблокированные сайты открываются"
