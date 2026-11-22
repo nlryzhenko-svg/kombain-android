@@ -58,7 +58,7 @@ object Maintenance {
     suspend fun checkServers(ctx: Context) {
         for (node in ServerStore.all()) {
             val before = node.health
-            val r = SshRunner(node) {}.run(listOf("stats"))
+            val r = SshRunner(node, { Logs.i(it) }) { _ -> false }.run(listOf("stats"))
             val st = r.stats
             if (st != null) Deployer.saveStats(node, st) else {
                 node.health = "не отвечает по SSH"
