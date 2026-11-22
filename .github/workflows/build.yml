@@ -1,11 +1,11 @@
 name: Сборка APK
 
-# Вручную (Actions → «Сборка APK» → Run workflow) или тегом v3.3.1 → релиз с APK.
+# Вручную (Actions → «Сборка APK» → Run workflow) или тегом vX.Y.Z → релиз с APK.
 on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Опубликовать релиз (тег берётся из VERSION_NAME)"
+        description: "Опубликовать релиз (тег берётся из VERSION_NAME; нужен ключ подписи)"
         type: boolean
         default: false
   push:
@@ -55,6 +55,7 @@ jobs:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
           ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+          ALLOW_UNSIGNED_APK: ${{ github.event_name == 'workflow_dispatch' && inputs.release == false && secrets.KEYSTORE_BASE64 == '' }}
         run: bash buildScript/ci-apk.sh
       - uses: actions/upload-artifact@v4
         with:
