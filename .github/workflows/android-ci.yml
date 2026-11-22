@@ -1,0 +1,75 @@
+name: Android CI APK
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [fix/android-ci-ssh-2026-11]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+          cache: false
+
+      - name: Install Android NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.0.8775105" > /dev/null
+
+      - name: Cache libcore
+        id: core
+        uses: actions/cache@v4
+        with:
+          path: app/libs/libcore.aar
+          key: libcore-${{ hashFiles('buildScript/lib/core/**', 'libcore/**') }}
+
+      - name: Build libcore
+        if: steps.core.outputs.cache-hit != 'true'
+        run: ./run lib core
+
+      - name: Cache Xray and Sudoku
+        id: xray
+        uses: actions/cache@v4
+        with:
+          path: app/executableSo
+          key: exe-${{ hashFiles('buildScript/lib/xray.sh', 'buildScript/lib/sudoku.sh') }}
+
+      - name: Build Xray and Sudoku
+        if: steps.xray.outputs.cache-hit != 'true'
+        run: |
+          bash buildScript/lib/xray.sh
+          bash buildScript/lib/sudoku.sh
+
+      - name: Build APK (unsigned test artifact)
+        env:
+          ALLOW_UNSIGNED_APK: '1'
+        run: bash buildScript/ci-apk.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DAK-test-${{ github.run_number }}
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 7
