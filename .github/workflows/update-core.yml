@@ -59,6 +59,7 @@ jobs:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
           ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+          ALLOW_UNSIGNED_APK: "1"
         run: bash buildScript/ci-apk.sh
       - uses: actions/upload-artifact@v4
         if: steps.check.outputs.update == 'yes'

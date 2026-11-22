@@ -25,9 +25,13 @@ class NodeResult(
 
 /**
  * Runs the bundled kombain-node.sh on a server over SSH, streaming its progress.
- * Host keys are trusted on first use and then pinned per server.
+ * First-use host keys require explicit user confirmation and are then pinned per server.
  */
-class SshRunner(private val node: ServerNode, private val log: (String) -> Unit) {
+class SshRunner(
+    private val node: ServerNode,
+    private val log: (String) -> Unit,
+    private val approveHostKey: (String) -> Boolean,
+) {
 
     private fun q(s: String) = "'" + s.replace("'", "'\\''") + "'"
 
@@ -62,8 +66,13 @@ class SshRunner(private val node: ServerNode, private val log: (String) -> Unit)
             throw IllegalStateException("Ключ сервера изменился ($fp). Если вы переустанавливали сервер — удалите его из списка и добавьте заново.")
         }
         if (node.hostKey.isBlank()) {
+            if (!approveHostKey(fp)) {
+                s.disconnect()
+                throw IllegalStateException("Подтверждение SSH-ключа отклонено. Подключение остановлено.")
+            }
             node.hostKey = fp
-            log("Отпечаток сервера: $fp")
+            ServerStore.upsert(node)
+            log("SSH-ключ сервера подтверждён и сохранён: $fp")
         }
         return s
     }
