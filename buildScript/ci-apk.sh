@@ -6,6 +6,17 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 umask 077
 
+had_local_properties=0
+cleanup() {
+  rm -f release.keystore
+  if [[ "$had_local_properties" == "1" ]]; then
+    mv .local.properties.ci-backup local.properties
+  else
+    rm -f local.properties .local.properties.ci-backup
+  fi
+}
+trap cleanup EXIT
+
 signed=0
 if [[ -n "${KEYSTORE_BASE64:-}" ]]; then
   for name in KEYSTORE_PASS ALIAS_NAME ALIAS_PASS; do
@@ -31,20 +42,10 @@ fi
 [ -f app/executableSo/arm64-v8a/libxray.so ] || { echo "::error::нет libxray.so (Xray-core)"; exit 1; }
 [ -f app/executableSo/arm64-v8a/libsudoku.so ] || { echo "::error::нет libsudoku.so (Sudoku)"; exit 1; }
 
-had_local_properties=0
 if [[ -f local.properties ]]; then
   cp local.properties .local.properties.ci-backup
   had_local_properties=1
 fi
-cleanup() {
-  rm -f release.keystore
-  if [[ "$had_local_properties" == "1" ]]; then
-    mv .local.properties.ci-backup local.properties
-  else
-    rm -f local.properties .local.properties.ci-backup
-  fi
-}
-trap cleanup EXIT
 
 {
   echo "sdk.dir=$ANDROID_HOME"
