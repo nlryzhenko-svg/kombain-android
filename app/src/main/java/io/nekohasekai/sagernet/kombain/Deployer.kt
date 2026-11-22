@@ -10,6 +10,10 @@ import io.nekohasekai.sagernet.ktx.onMainDispatcher
 import io.nekohasekai.sagernet.ktx.parseProxies
 import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
 import org.json.JSONObject
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Drives server deployment and keeps one shared session (log + state), so the screen
@@ -30,6 +34,24 @@ object Deployer {
     var userAdded: ((ServerNode, String, JSONObject) -> Unit)? = null
     /** called on the main thread when the server's Telegram proxy link is ready */
     var telegramReady: ((ServerNode, String) -> Unit)? = null
+    /** Main-thread confirmation for an SSH host key seen for the first time. */
+    @Volatile
+    var hostKeyApproval: ((ServerNode, String, (Boolean) -> Unit) -> Unit)? = null
+
+    private fun confirmHostKey(node: ServerNode, fingerprint: String): Boolean {
+        val callback = hostKeyApproval ?: return false
+        val latch = CountDownLatch(1)
+        var accepted = false
+        Handler(Looper.getMainLooper()).post {
+            runCatching {
+                callback(node, fingerprint) { decision ->
+                    accepted = decision
+                    latch.countDown()
+                }
+            }.onFailure { latch.countDown() }
+        }
+        return latch.await(2, TimeUnit.MINUTES) && accepted
+    }
 
     private fun emit(line: String) {
         synchronized(log) { log.append(line).append('\n') }
@@ -60,7 +82,7 @@ object Deployer {
     /** Runs the node script and keeps the backup it returns (for «Переехать на новый сервер»). */
     private fun ssh(node: ServerNode) = object {
         fun run(args: List<String>): NodeResult {
-            val r = SshRunner(node, ::emit).run(args)
+            val r = SshRunner(node, ::emit) { fingerprint -> confirmHostKey(node, fingerprint) }.run(args)
             if (r.ok) r.export?.takeIf { it.length > 100 }?.let {
                 node.backup = it
                 node.backupAt = System.currentTimeMillis()
