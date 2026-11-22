@@ -583,10 +583,25 @@ class MainActivity : ThemedActivity(),
     override fun onStart() {
         connection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND)
         super.onStart()
+        io.nekohasekai.sagernet.kombain.Deployer.hostKeyApproval = { node, fingerprint, answer ->
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Проверка SSH-ключа")
+                .setMessage(
+                    "Первое подключение к ${node.host}:${node.sshPort}.\n\n" +
+                    "Отпечаток ключа: $fingerprint\n\n" +
+                    "Сверьте его с отпечатком в панели или консоли хостинг-провайдера. " +
+                    "Подтверждайте только при полном совпадении. Если проверить не удалось — отклоните подключение."
+                )
+                .setPositiveButton("Проверил, доверять") { _, _ -> answer(true) }
+                .setNegativeButton("Отклонить") { _, _ -> answer(false) }
+                .setOnCancelListener { answer(false) }
+                .show()
+        }
         io.nekohasekai.sagernet.kombain.AppLock.check(this)
     }
 
     override fun onStop() {
+        io.nekohasekai.sagernet.kombain.Deployer.hostKeyApproval = null
         connection.updateConnectionId(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_BACKGROUND)
         io.nekohasekai.sagernet.kombain.AppLock.onStop()
         super.onStop()
