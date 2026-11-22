@@ -3,6 +3,9 @@ package io.nekohasekai.sagernet.kombain
 import android.util.Base64
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.JSch
+import com.jcraft.jsch.HostKey
+import com.jcraft.jsch.HostKeyRepository
+import com.jcraft.jsch.UserInfo
 import com.jcraft.jsch.Session
 import io.nekohasekai.sagernet.ktx.app
 import org.json.JSONObject
@@ -37,13 +40,51 @@ class SshRunner(
 
     private fun connect(): Session {
         val jsch = JSch()
+        var approvedFingerprint: String? = null
+        var hostKeyRejected = false
+        var hostKeyChanged = false
+
+        // JSch checks the server key during the SSH handshake, before user authentication.
+        // Never use StrictHostKeyChecking=no: that would expose passwords/private-key auth to a MITM.
+        jsch.hostKeyRepository = object : HostKeyRepository {
+            override fun check(host: String, key: ByteArray): Int {
+                val fingerprint = try {
+                    HostKey(host, key).getFingerPrint(jsch)
+                } catch (_: Exception) {
+                    hostKeyChanged = true
+                    return HostKeyRepository.CHANGED
+                }
+
+                if (node.hostKey.isNotBlank()) {
+                    if (node.hostKey == fingerprint) return HostKeyRepository.OK
+                    hostKeyChanged = true
+                    return HostKeyRepository.CHANGED
+                }
+
+                if (approveHostKey(fingerprint)) {
+                    approvedFingerprint = fingerprint
+                    return HostKeyRepository.OK
+                }
+
+                hostKeyRejected = true
+                return HostKeyRepository.NOT_INCLUDED
+            }
+
+            override fun add(hostkey: HostKey, ui: UserInfo) = Unit
+            override fun remove(host: String, type: String) = Unit
+            override fun remove(host: String, type: String, key: ByteArray) = Unit
+            override fun getKnownHostsRepositoryID(): String = "DAK pinned SSH host keys"
+            override fun getHostKey(): Array<HostKey> = emptyArray()
+            override fun getHostKey(host: String, type: String): Array<HostKey> = emptyArray()
+        }
+
         if (node.privateKey.isNotBlank()) {
             jsch.addIdentity("kombain", node.privateKey.trim().toByteArray(), null,
                 node.password.takeIf { it.isNotBlank() }?.toByteArray())
         }
         val s = jsch.getSession(node.user.ifBlank { "root" }, node.host.trim(), node.sshPort)
         if (node.password.isNotBlank() && node.privateKey.isBlank()) s.setPassword(node.password)
-        s.setConfig("StrictHostKeyChecking", "no")
+        s.setConfig("StrictHostKeyChecking", "yes")
         s.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
         s.setServerAliveInterval(15_000)
         log("Подключаюсь к ${node.host}:${node.sshPort}…")
@@ -51,28 +92,28 @@ class SshRunner(
             s.connect(15_000)
         } catch (e: Exception) {
             val m = e.message.orEmpty()
-            throw IllegalStateException(
-                when {
-                    m.contains("Auth fail", true) || m.contains("auth", true) -> "Неверный логин, пароль или ключ"
-                    m.contains("timeout", true) -> "Сервер не отвечает (проверьте IP и SSH-порт)"
-                    m.contains("refused", true) -> "Порт SSH закрыт (проверьте SSH-порт)"
-                    else -> "Не удалось подключиться: $m"
-                }
-            )
-        }
-        val fp = s.hostKey.getFingerPrint(jsch)
-        if (node.hostKey.isNotBlank() && node.hostKey != fp) {
-            s.disconnect()
-            throw IllegalStateException("Ключ сервера изменился ($fp). Если вы переустанавливали сервер — удалите его из списка и добавьте заново.")
-        }
-        if (node.hostKey.isBlank()) {
-            if (!approveHostKey(fp)) {
-                s.disconnect()
-                throw IllegalStateException("Подтверждение SSH-ключа отклонено. Подключение остановлено.")
+            val reason = when {
+                hostKeyRejected -> "Подтверждение SSH-ключа отклонено. Подключение остановлено."
+                hostKeyChanged -> "Ключ SSH-сервера изменился. Подключение остановлено; проверьте сервер отдельно."
+                m.contains("Auth fail", true) || m.contains("auth", true) -> "Неверный логин, пароль или ключ"
+                m.contains("timeout", true) -> "Сервер не отвечает (проверьте IP и SSH-порт)"
+                m.contains("refused", true) -> "Порт SSH закрыт (проверьте SSH-порт)"
+                else -> "Не удалось подключиться: $m"
             }
-            node.hostKey = fp
+            s.disconnect()
+            throw IllegalStateException(reason)
+        }
+
+        val fingerprint = s.hostKey.getFingerPrint(jsch)
+        if (node.hostKey.isBlank()) {
+            // This value was approved inside HostKeyRepository.check(), before SSH authentication.
+            if (approvedFingerprint != fingerprint) {
+                s.disconnect()
+                throw IllegalStateException("Не удалось подтвердить SSH-ключ сервера. Подключение остановлено.")
+            }
+            node.hostKey = fingerprint
             ServerStore.upsert(node)
-            log("SSH-ключ сервера подтверждён и сохранён: $fp")
+            log("SSH-ключ сервера подтверждён и сохранён: $fingerprint")
         }
         return s
     }
