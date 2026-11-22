@@ -25,7 +25,7 @@ class NodeResult(
 
 /**
  * Runs the bundled kombain-node.sh on a server over SSH, streaming its progress.
- * Host keys are trusted on first use and then pinned per server.
+ * First-use host keys require explicit user confirmation and are then pinned per server.
  */
 class SshRunner(
     private val node: ServerNode,
