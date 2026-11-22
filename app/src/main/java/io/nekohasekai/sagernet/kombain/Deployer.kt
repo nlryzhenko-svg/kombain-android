@@ -357,7 +357,7 @@ object Deployer {
     /** Sites next to the server for the masking choice; read-only, so not shown as a server operation. */
     fun scanSites(node: ServerNode, done: (org.json.JSONArray?, String?) -> Unit) {
         runOnDefaultDispatcher {
-            val r = SshRunner(node) { }.run(listOf("find-sni", "--host", node.host.trim()))
+            val r = SshRunner(node, ::emit) { fingerprint -> confirmHostKey(node, fingerprint) }.run(listOf("find-sni", "--host", node.host.trim()))
             onMainDispatcher { done(r.sites, r.error) }
         }
     }
