@@ -133,8 +133,9 @@ fun Project.setupAppCommon() {
         buildTypes {
             val key = signingConfigs.findByName("release")
             if (key != null) {
+                // Keep the production keystore exclusive to release artifacts.
+                // Debug variants use Gradle's dedicated debug key.
                 getByName("release").signingConfig = key
-                getByName("debug").signingConfig = key
             }
         }
     }
